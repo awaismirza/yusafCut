@@ -24,9 +24,11 @@ export function Waveform() {
 
     const ws = WaveSurfer.create({
       container: containerRef.current,
-      waveColor: "rgba(120, 120, 180, 0.5)",
-      progressColor: "rgba(160, 160, 255, 0.85)",
-      cursorColor: "rgba(255, 80, 80, 0.9)",
+      // Match the design tokens — warm-neutral wave with teal accent for
+      // played-through region and a teal playhead cursor.
+      waveColor: "rgba(170, 170, 180, 0.40)",
+      progressColor: "rgba(99, 207, 220, 0.85)",
+      cursorColor: "rgba(99, 207, 220, 1)",
       cursorWidth: 2,
       height: 68,
       barWidth: 2,
@@ -36,6 +38,10 @@ export function Waveform() {
     });
 
     void ws.load(convertFileSrc(firstMedia.path));
+    // The video element in <VideoPreview/> is the audio source of truth.
+    // WaveSurfer creates an internal <audio> for waveform metering — mute it
+    // so we don't double-play the soundtrack.
+    ws.setMuted(true);
 
     // Seek the video (and start playback) when the user clicks the waveform.
     // WaveSurfer v7 fires "interaction" with the new source time in seconds.

@@ -18,6 +18,7 @@ export default [
         navigator: "readonly",
         console: "readonly",
         crypto: "readonly",
+        React: "readonly",
         // Timers
         setTimeout: "readonly",
         clearTimeout: "readonly",
@@ -28,12 +29,14 @@ export default [
         HTMLButtonElement: "readonly",
         HTMLVideoElement: "readonly",
         HTMLDivElement: "readonly",
+        HTMLInputElement: "readonly",
         // Browser APIs used in Scribe
         Event: "readonly",
         CustomEvent: "readonly",
         CSS: "readonly",
         MutationObserver: "readonly",
         ResizeObserver: "readonly",
+        DOMException: "readonly",
         // DOM event types
         KeyboardEvent: "readonly",
         MouseEvent: "readonly",

@@ -27,7 +27,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { formatDuration } from "@/lib/timecode";
+import { formatTimecode } from "@/lib/timecode";
 
 function firstMediaPath(project: Project): string | null {
   const ids = Object.keys(project.media);
@@ -68,12 +68,28 @@ export function VideoPreview() {
       ? Math.round((currentTime / outputDuration) * 1000)
       : 0;
 
+  // Tracks the latest user intent so we can ignore stale Promise rejections
+  // from interrupted el.play() calls — e.g. when a click-on-word seek races
+  // the play/pause effect. Without this guard, an AbortError from the first
+  // play() flips `playing` back to false and pauses the video immediately.
+  const playIntentRef = useRef(false);
+
   // ── Drive play/pause state from store ────────────────────────────────────
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (playing) void el.play().catch(() => setPlaying(false));
-    else el.pause();
+    playIntentRef.current = playing;
+    if (playing) {
+      // Don't await — fire-and-forget. Only flip state back if the call
+      // actually failed AND we still intend to be playing (i.e. the failure
+      // wasn't because another seek/play call superseded us).
+      el.play().catch((err: DOMException) => {
+        if (err.name === "AbortError") return; // interrupted by another play() — ignore
+        if (playIntentRef.current) setPlaying(false);
+      });
+    } else {
+      el.pause();
+    }
   }, [playing, setPlaying]);
 
   useEffect(() => {
@@ -86,26 +102,18 @@ export function VideoPreview() {
     if (el) el.playbackRate = rate;
   }, [rate]);
 
-  // ── Seek from transcript / waveform → play immediately ───────────────────
-  // We call el.play() directly here rather than going through setPlaying(true)
-  // to avoid a race where React hasn't re-rendered yet when play() is needed.
+  // ── Seek from transcript / waveform → start playing ─────────────────────
+  // We only set currentTime here and flip the store flag. The play/pause
+  // effect above is the single source of truth for el.play()/el.pause() —
+  // keeping that invariant prevents the AbortError race we used to hit when
+  // both this handler and the effect called play() in quick succession.
   useEffect(() => {
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ start: number }>;
       const el = videoRef.current;
       if (!el) return;
       el.currentTime = ce.detail.start;
-      void el
-        .play()
-        .then(() => setPlaying(true))
-        .catch(() => {
-          // Interrupted (e.g. another seek queued) — try once after the seeked event.
-          el.addEventListener(
-            "seeked",
-            () => void el.play().then(() => setPlaying(true)).catch(() => {}),
-            { once: true },
-          );
-        });
+      setPlaying(true);
     };
     window.addEventListener("scribe:seek-source", handler);
     return () => window.removeEventListener("scribe:seek-source", handler);
@@ -320,10 +328,10 @@ export function VideoPreview() {
             <SkipForward className="h-3.5 w-3.5" />
           </Button>
 
-          <span className="ml-1.5 select-none text-xs tabular-nums text-white/40">
-            {formatDuration(currentTime)}
-            <span className="mx-1 text-white/20">/</span>
-            {formatDuration(displayDuration)}
+          <span className="ml-1.5 select-none text-xs tabular-nums text-white/50">
+            {formatTimecode(currentTime, { ms: false })}
+            <span className="mx-1 text-white/25">/</span>
+            {formatTimecode(displayDuration, { ms: false })}
           </span>
 
           <div className="ml-auto flex items-center gap-0.5">

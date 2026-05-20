@@ -69,20 +69,23 @@
   border-radius: 3px;
 }
 
-/* ProseMirror root — comfortable reading column */
+/* ProseMirror root — comfortable reading column with room on the left for
+   the floating timestamp chip column. */
 .transcript-editor {
-  padding: 2.5rem 2.75rem 4rem;
-  max-width: 720px;
+  padding: 2.5rem 2.75rem 6rem 6.5rem;
+  max-width: 880px;
   margin: 0 auto;
-  font-size: 16px;
+  font-size: 16.5px;
   line-height: 1.85;
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
   outline: none;
 }
 
-/* Paragraph spacing */
+/* Paragraph spacing — slightly more breathing room between paragraphs so
+   the floating timestamp chips don't overlap. */
 .transcript-editor p {
-  margin: 0 0 1.1em;
+  margin: 0 0 1.5em;
+  scroll-margin-top: 4rem;
 }
 
 /* ── Word spans ──────────────────────────────────────────────────────── */
@@ -128,23 +131,56 @@
 /* ProseMirror focus ring */
 .ProseMirror:focus { outline: none; }
 
-/* ── Paragraph timestamp labels ──────────────────────────────────────── */
-/* Rendered as a non-editable chip before each paragraph. */
-.paragraph-ts {
-  display: inline-block;
-  user-select: none;
+/* ── Paragraph timestamp chips (floating column) ─────────────────────────
+   These are React-rendered absolutely-positioned buttons that live in their
+   own column to the left of the editor. Each chip is clickable and seeks
+   the video to its paragraph start. */
+.paragraph-ts-chip {
+  position: absolute;
+  left: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  height: 1.6em;                  /* roughly matches line-height of first line */
+  margin-top: 0.15em;
+  padding: 0 6px;
+  border-radius: 4px;
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   font-family: ui-monospace, 'Cascadia Code', monospace;
   color: hsl(var(--muted-foreground));
-  opacity: 0.55;
-  padding: 1px 6px 1px 0;
-  margin-right: 4px;
-  vertical-align: middle;
-  pointer-events: none;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 80ms ease, background-color 80ms ease, border-color 80ms ease;
 }
-[data-theme="dark"] .paragraph-ts { opacity: 0.4; }
+.paragraph-ts-chip:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+  border-color: hsl(var(--border));
+}
+[data-theme="dark"] .paragraph-ts-chip { opacity: 0.55; }
+[data-theme="dark"] .paragraph-ts-chip:hover { opacity: 1; }
+
+/* ── Find / replace match highlight ─────────────────────────────────────── */
+.transcript-editor .word.is-match {
+  background-color: hsl(48 95% 55% / 0.30);
+  border-radius: 3px;
+}
+.transcript-editor .word.is-current-match {
+  background-color: hsl(28 95% 58% / 0.55);
+  outline: 2px solid hsl(28 95% 58% / 0.85);
+  outline-offset: 0;
+  color: hsl(var(--foreground));
+}
+[data-theme="dark"] .transcript-editor .word.is-match {
+  background-color: hsl(48 95% 55% / 0.22);
+}
+[data-theme="dark"] .transcript-editor .word.is-current-match {
+  background-color: hsl(28 95% 58% / 0.45);
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    PLAYBACK SCRUBBER  (range input on the dark video control bar)
