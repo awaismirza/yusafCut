@@ -123,7 +123,7 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
         className="toolbox-button"
         title="Zoom in timeline"
         onClick={() => setTimelineZoom(timelineZoom * 1.5)}
-        disabled={timelineZoom >= 7.99}
+        disabled={timelineZoom >= 31.99}
       >
         <ZoomIn className="h-4 w-4" />
       </Button>

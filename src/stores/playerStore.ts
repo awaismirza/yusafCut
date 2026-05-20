@@ -55,7 +55,9 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setRate: (r) => set({ rate: r }),
   setTimelineRange: (markIn, markOut) => set({ timelineMarkIn: markIn, timelineMarkOut: markOut }),
   clearTimelineRange: () => set({ timelineMarkIn: null, timelineMarkOut: null }),
-  setTimelineZoom: (zoom) => set({ timelineZoom: Math.max(1, Math.min(8, zoom)) }),
+  // Wider zoom range supports the horizontal-scrolling rail introduced in v2.1.
+  // 32x lets editors land on individual words on long-form content.
+  setTimelineZoom: (zoom) => set({ timelineZoom: Math.max(1, Math.min(32, zoom)) }),
   reset: () =>
     set({
       currentTime: 0,
