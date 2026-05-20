@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "setup:all": "bash scripts/setup.sh",
+    "build:production": "bash scripts/build-production.sh",
     "dev:full": "bash scripts/dev.sh",
     "dev:sidecar": "bash scripts/sidecar-dev.sh",
     "dev": "vite",
