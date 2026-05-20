@@ -14,6 +14,7 @@ interface UIState {
   exportingProgress: number | null;
   modelDownloadProgress: number | null;
   transcribeProgress: number | null;
+  mediaLoading: boolean;
 
   pushToast: (t: Omit<Toast, "id">) => void;
   dismissToast: (id: string) => void;
@@ -21,6 +22,7 @@ interface UIState {
   setExportingProgress: (p: number | null) => void;
   setModelDownloadProgress: (p: number | null) => void;
   setTranscribeProgress: (p: number | null) => void;
+  setMediaLoading: (loading: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -28,6 +30,7 @@ export const useUIStore = create<UIState>((set) => ({
   exportingProgress: null,
   modelDownloadProgress: null,
   transcribeProgress: null,
+  mediaLoading: false,
 
   pushToast: (t) =>
     set((s) => ({
@@ -41,4 +44,5 @@ export const useUIStore = create<UIState>((set) => ({
   setExportingProgress: (p) => set({ exportingProgress: p }),
   setModelDownloadProgress: (p) => set({ modelDownloadProgress: p }),
   setTranscribeProgress: (p) => set({ transcribeProgress: p }),
+  setMediaLoading: (loading) => set({ mediaLoading: loading }),
 }));

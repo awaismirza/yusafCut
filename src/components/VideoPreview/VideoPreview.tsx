@@ -60,6 +60,7 @@ export function VideoPreview() {
 
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
+  const [nativeDuration, setNativeDuration] = useState(0);
 
   const mediaPath = firstMediaPath(project);
   const src = mediaPath ? convertFileSrc(mediaPath) : null;
@@ -79,10 +80,25 @@ export function VideoPreview() {
   // play() flips `playing` back to false and pauses the video immediately.
   const playIntentRef = useRef(false);
 
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    playIntentRef.current = false;
+    setCurrentTime(0);
+    setPlaying(false);
+    setNativeDuration(0);
+    el.pause();
+    el.currentTime = 0;
+    el.load();
+  }, [src, setCurrentTime, setPlaying]);
+
   const playVideo = useCallback(() => {
     const el = videoRef.current;
     if (!el) return false;
     playIntentRef.current = true;
+    if (!el.currentSrc && src) {
+      el.load();
+    }
     const promise = el.play();
     if (promise) {
       promise.catch((err: DOMException) => {
@@ -92,7 +108,7 @@ export function VideoPreview() {
     }
     setPlaying(true);
     return true;
-  }, [setPlaying]);
+  }, [setPlaying, src]);
 
   const pauseVideo = useCallback(() => {
     const el = videoRef.current;
@@ -283,7 +299,6 @@ export function VideoPreview() {
   };
 
   // Display duration: use source duration in free-play mode, output duration otherwise
-  const [nativeDuration, setNativeDuration] = useState(0);
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;

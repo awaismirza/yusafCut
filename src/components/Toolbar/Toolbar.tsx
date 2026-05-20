@@ -36,7 +36,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { formatDuration } from "@/lib/timecode";
-import { newProject, totalDuration } from "@/lib/edl";
+import { addMediaWithTranscript as buildProjectWithMedia, newProject, totalDuration } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
 
 const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
@@ -52,14 +52,15 @@ export function Toolbar() {
   const dirty = useProjectStore((s) => s.dirty);
   const filePath = useProjectStore((s) => s.filePath);
   const setProject = useProjectStore((s) => s.setProject);
-  const addMediaWithTranscript = useProjectStore((s) => s.addMediaWithTranscript);
   const markSaved = useProjectStore((s) => s.markSaved);
   const closeProject = useProjectStore((s) => s.closeProject);
 
   const transcribeProgress = useUIStore((s) => s.transcribeProgress);
   const exportingProgress = useUIStore((s) => s.exportingProgress);
   const modelDownloadProgress = useUIStore((s) => s.modelDownloadProgress);
+  const mediaLoading = useUIStore((s) => s.mediaLoading);
   const pushToast = useUIStore((s) => s.pushToast);
+  const setMediaLoading = useUIStore((s) => s.setMediaLoading);
   const displayName = filePath?.split(/[\\/]/).pop() ?? `${project.name}.scribe`;
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
@@ -86,10 +87,14 @@ export function Toolbar() {
       filters: [{ name: "Video", extensions: ["mp4", "mov", "m4v", "mkv"] }],
     });
     if (typeof path !== "string") return;
+    setMediaLoading(true);
     try {
       const media = await importMedia(path);
-      // Initialise an empty transcript — user must press Transcribe.
-      addMediaWithTranscript(media, []);
+      const name = media.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Untitled";
+      const nextProject = buildProjectWithMedia(newProject(name), media, []);
+      useProjectStore.temporal.getState().clear();
+      resetPlayer();
+      setProject(nextProject);
       pushToast({ title: "Media imported", description: media.path });
     } catch (err) {
       pushToast({
@@ -97,6 +102,8 @@ export function Toolbar() {
         description: String(err),
         variant: "destructive",
       });
+    } finally {
+      setMediaLoading(false);
     }
   }
 
@@ -655,6 +662,27 @@ export function Toolbar() {
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Whisper running locally</span>
               <span>{Math.round((transcribeProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mediaLoading} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4 text-primary" />
+              Loading media
+            </DialogTitle>
+            <DialogDescription>
+              Probing the file and preparing it for local playback.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={55} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Reading metadata</span>
+              <span>Local file</span>
             </div>
           </div>
         </DialogContent>
