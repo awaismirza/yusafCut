@@ -7,8 +7,23 @@
 //!      stored in AppState and dropped on exit).
 //!
 //! The sidecar is started lazily on the first `call()` and kept alive for the
-//! lifetime of the process. If the child exits unexpectedly the state is
-//! cleared and the next `call()` will restart it.
+//! lifetime of the process. If the child exits unexpectedly the inner state is
+//! cleared so the *next* `call()` automatically restarts it.
+//!
+//! ## Bug fix: "sidecar stdin channel closed"
+//!
+//! Previously, the `Terminated` event handler drained in-flight requests but
+//! left `inner` as `Some(...)` holding a dead `stdin_tx`. Any subsequent
+//! `call()` would see `inner.is_some()`, skip the restart, and immediately
+//! fail with "sidecar stdin channel closed".
+//!
+//! The fix: pass an `Arc` of `inner` into the drain task so the `Terminated`
+//! handler can `*inner_arc.lock().await = None`, allowing `ensure_running` to
+//! restart the process correctly on the next call.
+//!
+//! Additionally, `call()` now clears `inner` itself when `stdin_tx.send()`
+//! fails (handles the race where the sidecar exits between `spawn()` and the
+//! first write).
 //!
 //! ## Protocol
 //!
@@ -60,6 +75,7 @@ struct RawResponse {
 // ---------------------------------------------------------------------------
 
 type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value>>>>>;
+type InnerArc   = Arc<Mutex<Option<SidecarInner>>>;
 
 // ---------------------------------------------------------------------------
 // LlmSidecar
@@ -71,7 +87,7 @@ type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value>>>>>;
 #[derive(Clone, Default)]
 pub struct LlmSidecar {
     /// Running sidecar state — `None` when not yet started or after a crash.
-    inner: Arc<Mutex<Option<SidecarInner>>>,
+    inner: InnerArc,
 }
 
 struct SidecarInner {
@@ -84,8 +100,9 @@ struct SidecarInner {
 impl LlmSidecar {
     /// Send a typed request to the sidecar and await the JSON `result` value.
     ///
-    /// Starts the child process on first call. Serialises `payload` to JSON,
-    /// writes the request line, and waits for the matching response line.
+    /// Starts the child process on first call (or restarts it after a crash).
+    /// Serialises `payload` to JSON, writes the request line, and waits for
+    /// the matching response line.
     pub async fn call(
         &self,
         app: &AppHandle,
@@ -97,7 +114,7 @@ impl LlmSidecar {
 
         {
             let mut guard = self.inner.lock().await;
-            let inner = Self::ensure_running(&mut guard, app).await?;
+            let inner = Self::ensure_running(&mut guard, app, self.inner.clone()).await?;
 
             // Register the pending response waiter before we send.
             inner.pending.lock().await.insert(id.clone(), tx);
@@ -111,10 +128,18 @@ impl LlmSidecar {
             let mut line =
                 serde_json::to_string(&req).context("serialise LLM request")?;
             line.push('\n');
-            inner
-                .stdin_tx
-                .send(line.into_bytes())
-                .map_err(|_| anyhow::anyhow!("sidecar stdin channel closed"))?;
+
+            if inner.stdin_tx.send(line.into_bytes()).is_err() {
+                // The writer task already exited (sidecar died between spawn and
+                // first write). Clear inner so the next call() will restart it,
+                // and remove the pending waiter we just inserted.
+                inner.pending.lock().await.remove(&id);
+                *guard = None;
+                return Err(anyhow::anyhow!(
+                    "mlx-sidecar exited before the request could be sent — \
+                     please try again (the sidecar will restart automatically)"
+                ));
+            }
         }
 
         // Await response outside the lock so other callers aren't blocked.
@@ -127,20 +152,26 @@ impl LlmSidecar {
     async fn ensure_running<'a>(
         guard: &'a mut Option<SidecarInner>,
         app: &AppHandle,
+        inner_arc: InnerArc,
     ) -> Result<&'a mut SidecarInner> {
         if guard.is_none() {
-            *guard = Some(Self::spawn(app).await?);
+            *guard = Some(Self::spawn(app, inner_arc).await?);
         }
         Ok(guard.as_mut().unwrap())
     }
 
-    async fn spawn(app: &AppHandle) -> Result<SidecarInner> {
+    /// Spawn the sidecar process and return a fresh `SidecarInner`.
+    ///
+    /// `inner_arc` is the same `Arc` that wraps this `Option<SidecarInner>`.
+    /// It is passed into the background drain task so the `Terminated` handler
+    /// can reset it to `None`, enabling automatic restart on the next `call()`.
+    async fn spawn(app: &AppHandle, inner_arc: InnerArc) -> Result<SidecarInner> {
         log::info!("Spawning mlx-sidecar…");
 
         let shell = app.shell();
         let (mut rx, mut child) = shell
             .sidecar("mlx-sidecar")
-            .context("mlx-sidecar not found in app bundle — run `python sidecars/mlx-llm/build.py` first")?
+            .context("mlx-sidecar not found in app bundle — run `npm run sidecar:setup && npm run sidecar:build`")?
             .spawn()
             .context("failed to spawn mlx-sidecar")?;
 
@@ -173,16 +204,18 @@ impl LlmSidecar {
                         Self::dispatch_line(line.trim(), &pending_bg).await;
                     }
                     CommandEvent::Stderr(bytes) => {
-                        // Python's logging module writes to stderr.
+                        // Python's logging module writes to stderr — surface at
+                        // warn so it's always visible without RUST_LOG=debug.
                         let msg = String::from_utf8_lossy(&bytes);
-                        log::debug!("[mlx-sidecar] {}", msg.trim());
+                        log::warn!("[mlx-sidecar] {}", msg.trim());
                     }
                     CommandEvent::Terminated(status) => {
                         log::warn!(
                             "mlx-sidecar exited (code={:?}). \
-                             It will restart on the next detect_chapters call.",
+                             Clearing inner state so the next call restarts it.",
                             status.code
                         );
+
                         // Fail every in-flight request.
                         let mut map = pending_bg.lock().await;
                         for (_, tx) in map.drain() {
@@ -190,6 +223,13 @@ impl LlmSidecar {
                                 "mlx-sidecar exited unexpectedly"
                             )));
                         }
+                        drop(map); // release pending lock before acquiring inner lock
+
+                        // ── KEY FIX ──────────────────────────────────────────
+                        // Reset inner to None so ensure_running() will restart
+                        // the sidecar on the next call() instead of trying to
+                        // write to the dead stdin channel.
+                        *inner_arc.lock().await = None;
                         break;
                     }
                     _ => {}
