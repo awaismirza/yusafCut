@@ -23,6 +23,8 @@ interface PlayerState {
   /** Output-time in/out selection from the timeline. */
   timelineMarkIn: number | null;
   timelineMarkOut: number | null;
+  /** Visual zoom level for the output timeline. 1 = full timeline. */
+  timelineZoom: number;
 
   // Setters used by the <video> element / transcript editor
   setCurrentTime: (t: number) => void;
@@ -32,6 +34,7 @@ interface PlayerState {
   setRate: (r: number) => void;
   setTimelineRange: (markIn: number | null, markOut: number | null) => void;
   clearTimelineRange: () => void;
+  setTimelineZoom: (zoom: number) => void;
   reset: () => void;
 }
 
@@ -43,6 +46,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   rate: 1.0,
   timelineMarkIn: null,
   timelineMarkOut: null,
+  timelineZoom: 1,
 
   setCurrentTime: (t) => set({ currentTime: t }),
   setPlaying: (p) => set({ playing: p }),
@@ -51,6 +55,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setRate: (r) => set({ rate: r }),
   setTimelineRange: (markIn, markOut) => set({ timelineMarkIn: markIn, timelineMarkOut: markOut }),
   clearTimelineRange: () => set({ timelineMarkIn: null, timelineMarkOut: null }),
+  setTimelineZoom: (zoom) => set({ timelineZoom: Math.max(1, Math.min(8, zoom)) }),
   reset: () =>
     set({
       currentTime: 0,
@@ -60,5 +65,6 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       rate: 1.0,
       timelineMarkIn: null,
       timelineMarkOut: null,
+      timelineZoom: 1,
     }),
 }));

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-20
+
+### Added
+- Timeline-docked editing toolbox with working in/out marker controls, marker
+  clearing, transcript search access, and timeline zoom.
+- Configurable delete-gap padding for transcript search/filler removals, from
+  0 to 10 seconds.
+- Indeterminate progress animation for local transcription and media probing
+  when reliable percentages are unavailable.
+
+### Changed
+- Removed non-functional Razor, Slip, and Slide tool buttons in favor of
+  controls that are wired to real editing behavior.
+- Pausing playback from Space/K/the preview button now restores playback speed
+  to 1x.
+
 ## [1.1.0] - 2026-05-20
 
 ### Added

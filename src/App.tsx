@@ -36,6 +36,7 @@ export default function App() {
       ? parsed
       : DEFAULT_VIDEO_WIDTH;
   });
+  const [findOpen, setFindOpen] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   // Scribe is an editing surface; keep the chrome consistently dark like an NLE.
@@ -87,8 +88,6 @@ export default function App() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       <Toolbar />
 
-      {hasMedia && <Toolbox />}
-
       {/*
        * IMPORTANT: keep a single VideoPreview instance across both layouts.
        * Switching between two different DOM trees here would unmount the
@@ -107,7 +106,11 @@ export default function App() {
         {hasTranscript && (
           <>
             <main className="relative flex min-w-0 flex-1 overflow-hidden border-r border-border">
-              <TranscriptEditor />
+              <TranscriptEditor
+                findOpen={findOpen}
+                onFindOpen={() => setFindOpen(true)}
+                onFindClose={() => setFindOpen(false)}
+              />
             </main>
 
             <div
@@ -136,11 +139,7 @@ export default function App() {
               ? "flex h-full shrink-0 flex-col overflow-hidden bg-black"
               : "flex w-full max-w-[900px] flex-col overflow-hidden rounded-2xl bg-black shadow-[0_8px_48px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.07]"
           }
-          style={
-            hasTranscript
-              ? { width: videoWidth }
-              : { height: "min(560px, 65vh)" }
-          }
+          style={hasTranscript ? { width: videoWidth } : { height: "min(560px, 65vh)" }}
         >
           <VideoPreview />
         </aside>
@@ -149,9 +148,8 @@ export default function App() {
           <p className="text-sm text-muted-foreground/70">
             {hasMedia ? (
               <>
-                Click{" "}
-                <span className="font-semibold text-foreground/80">Transcribe</span>{" "}
-                in the toolbar to generate a transcript and start editing
+                Click <span className="font-semibold text-foreground/80">Transcribe</span> in the
+                toolbar to generate a transcript and start editing
               </>
             ) : (
               "Open a video file using the toolbar above to get started"
@@ -162,7 +160,8 @@ export default function App() {
 
       {/* Full-width waveform — only when media is loaded */}
       {hasMedia && (
-        <div className="h-[154px] shrink-0 border-t border-border bg-background">
+        <div className="timeline-dock h-[154px] shrink-0 border-t border-border bg-background">
+          <Toolbox onFindClick={() => setFindOpen(true)} />
           <Waveform />
         </div>
       )}

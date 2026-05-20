@@ -132,7 +132,11 @@ export function Toolbar() {
     setMediaLoading(true);
     try {
       const media = await importMedia(path);
-      const name = media.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Untitled";
+      const name =
+        media.path
+          .split(/[\\/]/)
+          .pop()
+          ?.replace(/\.[^.]+$/, "") || "Untitled";
       const cachedWords = readTranscriptCache(media);
       const nextProject = buildProjectWithMedia(newProject(name), media, cachedWords ?? []);
       resetPlayer();
@@ -379,7 +383,11 @@ export function Toolbar() {
 
         <div className="toolbar-export">
           <span className="toolbar-duration">{formatDuration(totalDuration(project))}</span>
-          <Button size="sm" onClick={handleExport} className="h-8 gap-2 rounded-md px-3 font-semibold">
+          <Button
+            size="sm"
+            onClick={handleExport}
+            className="h-8 gap-2 rounded-md px-3 font-semibold"
+          >
             <Download className="h-4 w-4" /> Export .mp4
           </Button>
         </div>
@@ -434,10 +442,20 @@ export function Toolbar() {
         </div>
 
         <div className="tool-group">
-          <Button size="sm" variant="ghost" className="tool-button tool-button-primary" onClick={handleTranscribe}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button tool-button-primary"
+            onClick={handleTranscribe}
+          >
             <MicVocal className="h-4 w-4" /> Transcribe
           </Button>
-          <Button size="sm" variant="ghost" className="tool-button tool-button-danger" onClick={handleCloseProject}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button tool-button-danger"
+            onClick={handleCloseProject}
+          >
             <Power className="h-4 w-4" /> Close
           </Button>
         </div>
@@ -448,7 +466,8 @@ export function Toolbar() {
           <DialogHeader>
             <DialogTitle>Choose a Whisper model</DialogTitle>
             <DialogDescription>
-              Select a model to transcribe with. Download any model you don't have yet — larger models are more accurate but slower.
+              Select a model to transcribe with. Download any model you don't have yet — larger
+              models are more accurate but slower.
             </DialogDescription>
           </DialogHeader>
 
@@ -503,9 +522,7 @@ export function Toolbar() {
                         }}
                       >
                         <Download className="h-3 w-3" />
-                        {m.sizeMb >= 1000
-                          ? `${(m.sizeMb / 1000).toFixed(1)} GB`
-                          : `${m.sizeMb} MB`}
+                        {m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1)} GB` : `${m.sizeMb} MB`}
                       </Button>
                     )}
                   </div>
@@ -515,7 +532,8 @@ export function Toolbar() {
                     <div className="mt-2">
                       <Progress value={downloadProgress * 100} className="h-1.5" />
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Downloading… {Math.round(downloadProgress * 100)}% — do not close this window
+                        Downloading… {Math.round(downloadProgress * 100)}% — do not close this
+                        window
                       </p>
                     </div>
                   )}
@@ -703,10 +721,10 @@ export function Toolbar() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Progress value={(transcribeProgress ?? 0) * 100} />
+            <Progress indeterminate />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Whisper running locally</span>
-              <span>{Math.round((transcribeProgress ?? 0) * 100)}%</span>
+              <span>{(transcribeProgress ?? 0) > 0.05 ? "Decoding audio" : "Starting"}</span>
             </div>
           </div>
         </DialogContent>
@@ -724,7 +742,7 @@ export function Toolbar() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Progress value={55} />
+            <Progress indeterminate />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Reading metadata</span>
               <span>Local file</span>
@@ -761,9 +779,7 @@ export function Toolbar() {
               <Download className="h-4 w-4 text-primary" />
               Downloading model
             </DialogTitle>
-            <DialogDescription>
-              Preparing the local transcription model.
-            </DialogDescription>
+            <DialogDescription>Preparing the local transcription model.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Progress value={(modelDownloadProgress ?? 0) * 100} />

@@ -12,7 +12,6 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore, useTemporalProjectStore } from "@/stores/projectStore";
-import { useUIStore, type EditorTool } from "@/stores/uiStore";
 import { wordIdToOutputTime, wordIdsInOutputRange } from "@/lib/edl";
 
 function isMac() {
@@ -32,9 +31,7 @@ export function useKeyboardShortcuts() {
       const target = e.target as HTMLElement | null;
       const inTextField =
         !!target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
 
       const mod = isMac() ? e.metaKey : e.ctrlKey;
 
@@ -42,6 +39,7 @@ export function useKeyboardShortcuts() {
       if (e.key === " " && !inTextField) {
         e.preventDefault();
         const s = usePlayerStore.getState();
+        const willPause = s.playing;
         if (!s.playing && s.selectedWordIds.size > 0) {
           const project = useProjectStore.getState().project;
           let best: ReturnType<typeof wordIdToOutputTime> = null;
@@ -55,6 +53,7 @@ export function useKeyboardShortcuts() {
             );
           }
         }
+        if (willPause) s.setRate(1);
         window.dispatchEvent(new CustomEvent("scribe:toggle-play"));
         return;
       }
@@ -73,6 +72,7 @@ export function useKeyboardShortcuts() {
       }
       if (e.key.toLowerCase() === "k" && !inTextField) {
         e.preventDefault();
+        usePlayerStore.getState().setRate(1);
         window.dispatchEvent(new CustomEvent("scribe:pause"));
         return;
       }
@@ -85,26 +85,17 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      const toolShortcuts: Record<string, EditorTool> = {
-        v: "select",
-        c: "razor",
-        y: "slip",
-        u: "slide",
-      };
-      const nextTool = toolShortcuts[e.key.toLowerCase()];
-      if (nextTool && !inTextField) {
-        e.preventDefault();
-        useUIStore.getState().setActiveTool(nextTool);
-        return;
-      }
-
       if (e.key.toLowerCase() === "i" && !inTextField) {
         e.preventDefault();
         const s = usePlayerStore.getState();
         s.setTimelineRange(s.currentTime, s.timelineMarkOut);
         if (s.timelineMarkOut !== null) {
           s.setSelectedWordIds(
-            wordIdsInOutputRange(useProjectStore.getState().project, s.currentTime, s.timelineMarkOut),
+            wordIdsInOutputRange(
+              useProjectStore.getState().project,
+              s.currentTime,
+              s.timelineMarkOut,
+            ),
           );
         }
         return;
@@ -116,7 +107,11 @@ export function useKeyboardShortcuts() {
         s.setTimelineRange(s.timelineMarkIn, s.currentTime);
         if (s.timelineMarkIn !== null) {
           s.setSelectedWordIds(
-            wordIdsInOutputRange(useProjectStore.getState().project, s.timelineMarkIn, s.currentTime),
+            wordIdsInOutputRange(
+              useProjectStore.getState().project,
+              s.timelineMarkIn,
+              s.currentTime,
+            ),
           );
         }
         return;
@@ -124,7 +119,8 @@ export function useKeyboardShortcuts() {
 
       if (e.key.toLowerCase() === "x" && !inTextField) {
         const s = usePlayerStore.getState();
-        if (s.timelineMarkIn === null && s.timelineMarkOut === null && s.selectedWordIds.size === 0) return;
+        if (s.timelineMarkIn === null && s.timelineMarkOut === null && s.selectedWordIds.size === 0)
+          return;
         e.preventDefault();
         s.clearTimelineRange();
         s.setSelectedWordIds([]);
