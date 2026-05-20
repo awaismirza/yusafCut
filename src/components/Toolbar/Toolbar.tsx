@@ -34,8 +34,10 @@ import {
   Download,
   FilePlus2,
   FolderOpen,
+  History,
   MonitorUp,
   MicVocal,
+  Music,
   Power,
   Radio,
   Save,
@@ -55,6 +57,8 @@ import {
 import { buildSrt, buildVtt } from "@/lib/captions";
 import { usePlayerStore } from "@/stores/playerStore";
 import { Toolbox } from "@/components/Toolbox/Toolbox";
+import { MusicTracksDialog } from "@/components/Toolbox/MusicTracksDialog";
+import { SnapshotsDialog } from "@/components/Toolbox/SnapshotsDialog";
 import {
   cacheProjectTranscripts,
   readTranscriptCache,
@@ -133,18 +137,22 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("large-v3-turbo");
   const [installedModels, setInstalledModels] = useState<ModelInfo[]>([]);
   const [exportSettings, setExportSettings] = useState({
-    resolution: "1080p",
+    resolution: "original",
     customWidth: 1920,
     customHeight: 1080,
     videoBitrateKbps: 8000,
     audioBitrateKbps: 192,
     fps: "",
-    codec: "h264" as "h264" | "hevc",
+    codec: "auto" as "auto" | "h264" | "hevc",
+    /** When true, bypass smart-cut and re-encode every frame. */
+    forceReencode: false,
   });
   // Which model is currently being downloaded inside the dialog, and its progress.
   const [downloadingModel, setDownloadingModel] = useState<WhisperModel | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [musicDialogOpen, setMusicDialogOpen] = useState(false);
+  const [snapshotsDialogOpen, setSnapshotsDialogOpen] = useState(false);
   const [recordingMode, setRecordingMode] = useState<RecordingMode>("voiceover");
   const [recording, setRecording] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState("Ready to record locally");
@@ -520,10 +528,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         outputPath: outPath,
         preset: project.settings.exportPreset,
         ...dims,
-        codec: exportSettings.codec,
+        // "auto" means: don't specify a codec — let the smart-cut path stream-copy
+        // the source rather than transcoding. Explicit h264/hevc disables smart-cut.
+        codec: exportSettings.codec === "auto" ? undefined : exportSettings.codec,
         fps: exportSettings.fps ? Number(exportSettings.fps) : undefined,
         videoBitrateKbps: exportSettings.videoBitrateKbps,
         audioBitrateKbps: exportSettings.audioBitrateKbps,
+        forceReencode: exportSettings.forceReencode,
       });
       pushToast({ title: "Export complete", description: outPath });
     } catch (err) {
@@ -692,6 +703,24 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             onClick={() => setRecordDialogOpen(true)}
           >
             <Radio className="h-4 w-4" /> Record
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            title="Music tracks (ducked under voice on export)"
+            onClick={() => setMusicDialogOpen(true)}
+          >
+            <Music className="h-4 w-4" /> Music
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            title="Project snapshots (named restore points)"
+            onClick={() => setSnapshotsDialogOpen(true)}
+          >
+            <History className="h-4 w-4" /> Snapshots
           </Button>
           <Button
             size="sm"
@@ -954,11 +983,15 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                   className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                   value={exportSettings.codec}
                   onChange={(e) =>
-                    setExportSettings((s) => ({ ...s, codec: e.target.value as "h264" | "hevc" }))
+                    setExportSettings((s) => ({
+                      ...s,
+                      codec: e.target.value as "auto" | "h264" | "hevc",
+                    }))
                   }
                 >
-                  <option value="h264">H.264</option>
-                  <option value="hevc">HEVC</option>
+                  <option value="auto">Match source (smart-cut)</option>
+                  <option value="h264">H.264 (re-encode)</option>
+                  <option value="hevc">HEVC (re-encode)</option>
                 </select>
               </label>
               <label className="grid gap-1.5 text-sm">
@@ -1017,6 +1050,17 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                 </select>
               </label>
             </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={exportSettings.forceReencode}
+                onChange={(e) =>
+                  setExportSettings((s) => ({ ...s, forceReencode: e.target.checked }))
+                }
+              />
+              Force full re-encode (disable smart-cut)
+            </label>
           </div>
 
           <DialogFooter>
@@ -1156,6 +1200,9 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <MusicTracksDialog open={musicDialogOpen} onOpenChange={setMusicDialogOpen} />
+      <SnapshotsDialog open={snapshotsDialogOpen} onOpenChange={setSnapshotsDialogOpen} />
     </div>
   );
 }

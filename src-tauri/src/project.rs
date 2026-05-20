@@ -57,6 +57,7 @@ mod tests {
                 padding_ms: 80,
             },
             chapters: vec![],
+            audio_tracks: vec![],
         }
     }
 

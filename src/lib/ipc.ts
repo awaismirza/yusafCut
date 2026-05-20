@@ -137,6 +137,9 @@ export interface ExportOptions {
   height?: number;
   fps?: number;
   codec?: "h264" | "hevc";
+  /** Bypass smart-cut and force the slow full re-encode path. Used by the
+   *  "Force re-encode" advanced toggle in the export dialog. */
+  forceReencode?: boolean;
 }
 
 export function exportVideo(opts: ExportOptions): Promise<void> {
@@ -171,4 +174,69 @@ export function appDataDir(): Promise<string> {
 /** Open the export folder in Finder once a render is done. */
 export function revealInFinder(path: string): Promise<void> {
   return invoke<void>("reveal_in_finder", { path });
+}
+
+// ---------------------------------------------------------------------------
+// Jobs (background queue)
+// ---------------------------------------------------------------------------
+
+export type JobKind = "export" | "transcribe" | "download-model" | "snapshot";
+export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+export interface JobSnapshot {
+  id: string;
+  kind: JobKind;
+  title: string;
+  status: JobStatus;
+  /** 0..1 */
+  progress: number;
+  etaSec: number | null;
+  createdAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  error: string | null;
+}
+
+export function listJobs(): Promise<JobSnapshot[]> {
+  return invoke<JobSnapshot[]>("list_jobs");
+}
+
+export function cancelJob(id: string): Promise<void> {
+  return invoke<void>("cancel_job", { id });
+}
+
+export function onJobsUpdate(handler: (jobs: JobSnapshot[]) => void): Promise<UnlistenFn> {
+  return listen<JobSnapshot[]>("jobs:update", (e) => handler(e.payload));
+}
+
+// ---------------------------------------------------------------------------
+// Snapshots (project history / restore points)
+// ---------------------------------------------------------------------------
+
+export interface SnapshotIndex {
+  id: string;
+  label: string;
+  createdAt: string;
+  durationSec: number;
+  segments: number;
+}
+
+export function createSnapshot(
+  project: Project,
+  projectPath: string,
+  label: string,
+): Promise<SnapshotIndex> {
+  return invoke<SnapshotIndex>("create_snapshot", { project, projectPath, label });
+}
+
+export function listSnapshots(projectPath: string): Promise<SnapshotIndex[]> {
+  return invoke<SnapshotIndex[]>("list_snapshots", { projectPath });
+}
+
+export function restoreSnapshot(projectPath: string, id: string): Promise<Project> {
+  return invoke<Project>("restore_snapshot", { projectPath, id });
+}
+
+export function deleteSnapshot(projectPath: string, id: string): Promise<void> {
+  return invoke<void>("delete_snapshot", { projectPath, id });
 }

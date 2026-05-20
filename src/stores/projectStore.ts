@@ -11,14 +11,18 @@
 import { temporal, type TemporalState } from "zundo";
 import { create, useStore } from "zustand";
 import {
+  addAudioTrack,
   addChapter,
   addMediaWithTranscript,
   deleteWords,
   newProject,
+  removeAudioTrack,
   removeChapter,
   removeSilences,
   renameChapter,
+  updateAudioTrack,
   wordIdsInOutputRange,
+  type AudioTrack,
   type Project,
   type SourceMedia,
   type Word,
@@ -54,6 +58,16 @@ interface ProjectState {
   addChapter: (outputTime: number, title?: string) => void;
   removeChapter: (id: string) => void;
   renameChapter: (id: string, title: string) => void;
+  /** Audio-track ops (music beds / sfx mixed under the main EDL). */
+  addAudioTrack: (track: Omit<AudioTrack, "id">) => void;
+  removeAudioTrack: (id: string) => void;
+  updateAudioTrack: (
+    id: string,
+    patch: Partial<Omit<AudioTrack, "id" | "mediaId">>,
+  ) => void;
+  /** Add a SourceMedia entry without creating a transcript segment for it.
+   *  Used when importing a music file purely as an audio-track input. */
+  addMediaOnly: (media: SourceMedia) => void;
   markSaved: (path: string) => void;
   closeProject: () => void;
 }
@@ -182,6 +196,22 @@ export const useProjectStore = create<ProjectState>()(
         set((s) => ({ project: removeChapter(s.project, id), dirty: true })),
       renameChapter: (id, title) =>
         set((s) => ({ project: renameChapter(s.project, id, title), dirty: true })),
+
+      addAudioTrack: (track) =>
+        set((s) => ({ project: addAudioTrack(s.project, track), dirty: true })),
+      removeAudioTrack: (id) =>
+        set((s) => ({ project: removeAudioTrack(s.project, id), dirty: true })),
+      updateAudioTrack: (id, patch) =>
+        set((s) => ({ project: updateAudioTrack(s.project, id, patch), dirty: true })),
+      addMediaOnly: (media) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            media: { ...s.project.media, [media.id]: media },
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
 
       markSaved: (path) => set({ dirty: false, filePath: path }),
 

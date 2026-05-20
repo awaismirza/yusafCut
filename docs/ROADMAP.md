@@ -9,7 +9,7 @@ people pay for."
 Anything marked **Shipped in v2.1** below already lives on `main`. Everything
 else is opinion; pick what to schedule.
 
-## Shipped in v2.1 (this branch)
+## Shipped in v2.1
 
 | Feature | Why it matters |
 | --- | --- |
@@ -19,9 +19,22 @@ else is opinion; pick what to schedule.
 | One-click silence trim | The "remove ums" demo from Descript that goes viral. Pure EDL — instant, undoable. |
 | Chapter markers + ffmpeg `[CHAPTER]` metadata | YouTube auto-detects them on upload. Spotify, Apple Podcasts read the same blocks. |
 
+## Shipped in v2.2 (this branch)
+
+| Feature | Why it matters |
+| --- | --- |
+| Smart-cut export (stream-copy interior, re-encode at boundaries) | 30-minute exports finish in seconds. The single biggest demo improvement we have. |
+| Background job queue with cancel + persisted progress | Exports, transcriptions, and model downloads survive a reload; the Jobs flyout shows progress and ETA per job. |
+| Multi-track audio (music bed + sidechain ducking) | Podcast/voice-over creators get a real music mix at export, including auto-ducking under the speaker. |
+| Project history / named snapshots | Pin restore points inside the .scribe bundle. Survives restarts and ships with the project. |
+
 ---
 
 ## Tier 1 — quick wins that visibly raise the value floor (S/M)
+
+> **Shipped in v2.2.** See `Shipped in v2.2` above for the implementation notes.
+> Originally documented as four pieces of work, all of which now live on
+> `main`:
 
 ### Smart-cut export (stream-copy interior, re-encode at boundaries) — **L**
 Currently every export re-encodes 100% of the timeline through

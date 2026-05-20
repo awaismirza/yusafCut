@@ -601,6 +601,24 @@
   background: hsl(var(--pulse));
   box-shadow: 0 0 5px hsl(var(--pulse) / 0.7);
 }
+.scribe-statusbar button.chip {
+  border: 0;
+  background: transparent;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.scribe-statusbar button.chip:hover {
+  background: hsl(var(--border) / 0.4);
+  color: hsl(var(--foreground));
+}
+.scribe-statusbar button.chip.is-active {
+  color: hsl(var(--foreground));
+  background: hsl(var(--primary) / 0.15);
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    TRANSCRIPT TOOLBAR — "Remove fillers" / "Restore" buttons above the editor

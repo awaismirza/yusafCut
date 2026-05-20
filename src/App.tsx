@@ -11,6 +11,7 @@ import { useTranscribeProgress } from "@/hooks/useTranscribeProgress";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useUIStore } from "@/stores/uiStore";
+import { initJobsStream } from "@/stores/jobsStore";
 import { importMedia } from "@/lib/ipc";
 import { readTranscriptCache } from "@/lib/transcriptCache";
 import { totalDuration } from "@/lib/edl";
@@ -55,6 +56,21 @@ export default function App() {
   // Scribe is an editing surface; keep the chrome consistently dark like an NLE.
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
+  }, []);
+
+  // Subscribe to background job updates. The Rust JobQueue owns the truth;
+  // we just mirror it for the StatusBar flyout.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    void initJobsStream().then((dispose) => {
+      if (cancelled) dispose();
+      else unlisten = dispose;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   // Persist the chosen panel width.

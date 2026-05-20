@@ -7,11 +7,14 @@
 pub mod commands;
 pub mod edl;
 pub mod export_state;
+pub mod jobs;
 #[cfg(feature = "mlx-sidecar")]
 pub mod llm;
 pub mod media;
 pub mod project;
 pub mod recording_state;
+pub mod smart_cut;
+pub mod snapshots;
 pub mod transcribe;
 
 /// Shared application state passed into every Tauri command.
@@ -19,6 +22,7 @@ pub mod transcribe;
 pub struct AppState {
     pub export: export_state::ExportState,
     pub recording: recording_state::RecordingState,
+    pub jobs: jobs::JobQueue,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,9 +46,33 @@ pub fn run() {
             commands::project::relink_media,
             commands::export::export_video,
             commands::export::cancel_export,
+            commands::jobs::list_jobs,
+            commands::jobs::cancel_job,
+            commands::snapshots::create_snapshot,
+            commands::snapshots::list_snapshots,
+            commands::snapshots::restore_snapshot,
+            commands::snapshots::delete_snapshot,
             commands::misc::app_data_dir,
             commands::misc::reveal_in_finder,
         ])
+        .setup(|app| {
+            // Best-effort persistence of the jobs queue across restarts.
+            use tauri::Manager;
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let state = handle.state::<AppState>();
+                let path = handle
+                    .path()
+                    .app_data_dir()
+                    .ok()
+                    .map(|d| d.join("jobs.json"));
+                if let Some(p) = &path {
+                    state.jobs.load_from(p).await;
+                    state.jobs.cleanse_dead_jobs().await;
+                }
+            });
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running Scribe");
 }

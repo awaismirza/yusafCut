@@ -6,12 +6,14 @@
 //! Progress events are emitted on the channel `transcribe:progress` and
 //! `model:download:progress`. Frontend subscribes via `ipc.ts`.
 
+use crate::AppState;
 use crate::edl::Word;
+use crate::jobs::JobKind;
 use crate::transcribe::parse_whisper_json;
 use futures_util::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tokio::fs;
@@ -219,21 +221,40 @@ async fn unzip_coreml_encoder(zip_path: &PathBuf, parent_dir: &PathBuf) -> Resul
 }
 
 #[tauri::command]
-pub async fn download_model(app: AppHandle, name: WhisperModel) -> Result<(), String> {
+pub async fn download_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: WhisperModel,
+) -> Result<(), String> {
     let dir = models_dir(&app)?;
     fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
 
-    // ── Step 1: download the GGML .bin (counts as 0..0.85 of total progress) ──
-    let bin_dest = dir.join(name.filename());
-    download_hf_file(&app, name.filename(), &bin_dest, name, 0.85, 0.0).await?;
+    // Surface in the Jobs flyout so the user can see what's downloading.
+    let job = state
+        .jobs
+        .create(
+            &app,
+            JobKind::DownloadModel,
+            format!("Downloading model: {}", name.filename()),
+        )
+        .await;
+    job.mark_running().await;
 
-    // ── Step 2: download & unzip Core ML encoder ────────────────────────────────
-    // The GGML bin download above emitted progress up to 0.85 via download_hf_file.
-    // Now fetch the Core ML companion so whisper-cli can use Metal/ANE acceleration.
-    // ensure_coreml_encoder handles its own progress events and the final 1.0 flush.
-    ensure_coreml_encoder(&app, &dir, name).await;
+    let result = async {
+        // ── Step 1: GGML .bin (0..0.85) ──
+        let bin_dest = dir.join(name.filename());
+        download_hf_file(&app, name.filename(), &bin_dest, name, 0.85, 0.0).await?;
+        // ── Step 2: Core ML encoder (0.85..1.0) ──
+        ensure_coreml_encoder(&app, &dir, name).await;
+        Ok::<(), String>(())
+    }
+    .await;
 
-    Ok(())
+    match &result {
+        Ok(()) => job.mark_completed().await,
+        Err(e) => job.mark_failed(e.clone()).await,
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -318,7 +339,39 @@ async fn ensure_coreml_encoder(
 #[tauri::command]
 pub async fn transcribe(
     app: AppHandle,
+    state: State<'_, AppState>,
     opts: TranscribeOpts,
+) -> Result<TranscribeResult, String> {
+    // Surface in the Jobs flyout. Cancellation isn't currently wired through
+    // whisper-cli (it'll finish even if the user cancels), but the flyout
+    // entry still gives an honest "in progress / done" indicator.
+    let job = state
+        .jobs
+        .create(
+            &app,
+            JobKind::Transcribe,
+            format!("Transcribing — {}", opts.model_name.filename()),
+        )
+        .await;
+    job.mark_running().await;
+    let job_for_progress = job.clone();
+    let media_id_for_progress = opts.media_id.clone();
+
+    let result = transcribe_inner(&app, &opts, &job_for_progress, &media_id_for_progress).await;
+    match &result {
+        Ok(_) => job.mark_completed().await,
+        Err(e) => job.mark_failed(e.clone()).await,
+    }
+    result
+}
+
+/// Internal worker — pulled out so the outer `transcribe` can wrap the result
+/// in a job-status update. Keeps the function body small and testable.
+async fn transcribe_inner(
+    app: &AppHandle,
+    opts: &TranscribeOpts,
+    job: &crate::jobs::JobHandle,
+    media_id: &str,
 ) -> Result<TranscribeResult, String> {
     // Emit an immediate "started" event so the toolbar shows the progress bar
     // even before ffmpeg finishes extracting audio.
@@ -423,6 +476,9 @@ pub async fn transcribe(
                         current_time,
                     };
                     app.emit("transcribe:progress", p).ok();
+                    // Mirror progress onto the Jobs flyout entry.
+                    let eta = ((total_duration - current_time).max(0.0)) as i64;
+                    job.set_progress(progress, Some(eta)).await;
                 }
             }
             CommandEvent::Terminated(t) => {
@@ -434,6 +490,7 @@ pub async fn transcribe(
             _ => {}
         }
     }
+    let _ = media_id; // currently unused — kept for future cancel routing.
 
     // 4) whisper-cli writes <wav>.json — read it.
     let json_path = wav.with_extension("wav.json");
@@ -458,7 +515,7 @@ pub async fn transcribe(
     .ok();
 
     Ok(TranscribeResult {
-        media_id: opts.media_id,
+        media_id: opts.media_id.clone(),
         words,
     })
 }
