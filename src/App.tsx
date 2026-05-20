@@ -27,17 +27,25 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       <Toolbar />
-      <main className="grid flex-1 grid-cols-[1fr_420px] grid-rows-[1fr_120px] gap-0 overflow-hidden">
-        <section className="row-span-2 overflow-y-auto border-r border-border">
+
+      {/* Main editing area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: transcript — primary editing surface */}
+        <main className="flex-1 overflow-hidden border-r border-border">
           <TranscriptEditor />
-        </section>
-        <section className="overflow-hidden border-b border-border">
+        </main>
+
+        {/* Right: video preview + playback controls */}
+        <aside className="flex w-[360px] shrink-0 flex-col border-l border-border bg-black">
           <VideoPreview />
-        </section>
-        <section className="overflow-hidden">
-          <Waveform />
-        </section>
-      </main>
+        </aside>
+      </div>
+
+      {/* Bottom: full-width waveform / timeline */}
+      <div className="h-[88px] shrink-0 border-t border-border bg-background">
+        <Waveform />
+      </div>
+
       <Toaster />
     </div>
   );

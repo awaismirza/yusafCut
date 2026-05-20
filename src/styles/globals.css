@@ -24,21 +24,22 @@
 
   [data-theme="dark"],
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    /* Slightly richer dark palette — feels like a proper editor */
+    --background: 228 14% 8%;
+    --foreground: 220 15% 92%;
+    --primary: 220 15% 92%;
+    --primary-foreground: 228 14% 8%;
+    --secondary: 228 10% 14%;
+    --secondary-foreground: 220 15% 92%;
+    --muted: 228 10% 13%;
+    --muted-foreground: 220 8% 54%;
+    --accent: 228 10% 16%;
+    --accent-foreground: 220 15% 92%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 228 10% 16%;
+    --input: 228 10% 16%;
+    --ring: 220 10% 70%;
   }
 
   * {
@@ -50,19 +51,102 @@
   }
 }
 
-/* Transcript editor styles */
+/* ─── Transcript editor ──────────────────────────────────────────────────── */
 .transcript-editor {
-  @apply font-sans text-base leading-relaxed;
+  font-size: 15px;
+  line-height: 1.8;
+  @apply font-sans;
 }
+
+/* Individual word spans */
 .transcript-editor .word {
-  @apply rounded px-[1px] transition-colors;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 -1px;
+  transition: background-color 100ms ease, color 100ms ease;
 }
+.transcript-editor .word:hover {
+  background-color: hsl(var(--accent));
+}
+
+/* Currently-playing word — amber highlight */
 .transcript-editor .word.is-playing {
-  @apply bg-yellow-200 dark:bg-yellow-500/30;
+  background-color: hsl(45 95% 50% / 0.35);
+  color: hsl(38 92% 50%);
 }
+[data-theme="dark"] .transcript-editor .word.is-playing {
+  background-color: hsl(45 80% 50% / 0.28);
+  color: hsl(45 95% 72%);
+}
+
+/* Deleted words */
 .transcript-editor .word.is-deleted {
-  @apply line-through text-muted-foreground;
+  text-decoration: line-through;
+  color: hsl(var(--muted-foreground));
 }
+
+/* Low-confidence words */
 .transcript-editor .word.low-confidence {
-  @apply underline decoration-yellow-500 decoration-dotted underline-offset-2;
+  text-decoration: underline wavy hsl(38 92% 50% / 0.8);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* ProseMirror focus ring — remove default outline */
+.ProseMirror:focus {
+  outline: none;
+}
+
+/* Paragraph spacing inside the editor */
+.transcript-editor p {
+  margin-bottom: 0.9em;
+}
+
+/* ─── Playback scrubber ──────────────────────────────────────────────────── */
+.scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  outline: none;
+  position: relative;
+}
+
+/* Thumb — WebKit */
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
+  transition: transform 120ms ease;
+}
+.scrubber:hover::-webkit-slider-thumb,
+.scrubber:active::-webkit-slider-thumb {
+  transform: scale(1.3);
+}
+
+/* Thumb — Firefox */
+.scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Track — Firefox */
+.scrubber::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
 }

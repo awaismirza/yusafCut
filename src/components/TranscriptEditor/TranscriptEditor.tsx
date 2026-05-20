@@ -59,8 +59,13 @@ export function TranscriptEditor() {
       handleClickOn(_view, _pos, node, _nodePos, event) {
         if (node.type.name === "word") {
           const start = Number(node.attrs.start);
-          // Update playback to source-time of the clicked word
-          window.dispatchEvent(new CustomEvent("scribe:seek-source", { detail: { start, mediaId: undefined } }));
+          // Seek the video to the clicked word's source timestamp …
+          window.dispatchEvent(
+            new CustomEvent("scribe:seek-source", { detail: { start } }),
+          );
+          // … and start playback immediately (VideoPreview handles the seek event,
+          // but we also flip the store so the play button syncs up).
+          usePlayerStore.getState().setPlaying(true);
           event.preventDefault();
           return true;
         }
