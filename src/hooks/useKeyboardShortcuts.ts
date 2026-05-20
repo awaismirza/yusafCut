@@ -6,7 +6,7 @@
  *   Shift+Cmd+Z   redo
  *   Cmd+S         save  (caller wires the toolbar button)
  *   Cmd+E         export
- *   Delete        cut selection (handled inside TipTap editor)
+ *   Delete        cut selected transcript words
  */
 
 import { useEffect } from "react";
@@ -154,14 +154,30 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      if (!mod && (e.key === "Backspace" || e.key === "Delete") && !inTextField) {
+        const player = usePlayerStore.getState();
+        const projectStore = useProjectStore.getState();
+        const selectedIds = [...player.selectedWordIds];
+        if (selectedIds.length === 0) return;
         e.preventDefault();
-        useProjectStore.temporal.getState().undo();
+        projectStore.deleteWords(selectedIds);
+        player.setSelectedWordIds([]);
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        const temporal = useProjectStore.temporal.getState();
+        if (temporal.pastStates.length === 0) return;
+        e.preventDefault();
+        temporal.undo();
         return;
       }
       if (mod && e.key.toLowerCase() === "z" && e.shiftKey) {
+        const temporal = useProjectStore.temporal.getState();
+        if (temporal.futureStates.length === 0) return;
         e.preventDefault();
-        useProjectStore.temporal.getState().redo();
+        temporal.redo();
         return;
       }
       if (mod && e.key.toLowerCase() === "s") {

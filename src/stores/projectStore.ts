@@ -179,6 +179,28 @@ export const useProjectStore = create<ProjectState>()(
   ),
 );
 
+/**
+ * Replace the project as loaded baseline state, not as an undoable edit.
+ * Open/import/transcribe completion should not become "undo transcription".
+ */
+export function replaceProjectBaseline(
+  project: Project,
+  opts: { filePath?: string | null; dirty?: boolean } = {},
+) {
+  const temporalStore = useProjectStore.temporal.getState();
+  temporalStore.pause();
+  useProjectStore.setState({
+    project,
+    dirty: opts.dirty ?? false,
+    filePath: opts.filePath ?? null,
+  });
+  temporalStore.clear();
+  setTimeout(() => {
+    temporalStore.clear();
+    temporalStore.resume();
+  }, 150);
+}
+
 /** Helper for components to access undo/redo. */
 export function useTemporalProjectStore<T>(
   selector: (state: TemporalState<{ project: Project }>) => T,

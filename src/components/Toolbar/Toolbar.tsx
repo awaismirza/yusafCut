@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useProjectStore } from "@/stores/projectStore";
+import { replaceProjectBaseline, useProjectStore } from "@/stores/projectStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -36,8 +36,17 @@ import {
   Settings2,
 } from "lucide-react";
 import { formatDuration } from "@/lib/timecode";
-import { addMediaWithTranscript as buildProjectWithMedia, newProject, totalDuration } from "@/lib/edl";
+import {
+  addMediaWithTranscript as buildProjectWithMedia,
+  newProject,
+  totalDuration,
+  type Project,
+  type SourceMedia,
+  type Word,
+} from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
+
+const TRANSCRIPT_CACHE_PREFIX = "scribe.transcript.v1.";
 
 const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "tiny", label: "Tiny (fast, lower accuracy)", sizeMb: 75 },
@@ -47,13 +56,46 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "large-v3-turbo", label: "Large v3 Turbo (recommended)", sizeMb: 1600 },
 ];
 
+function transcriptCacheKey(media: SourceMedia): string {
+  return `${TRANSCRIPT_CACHE_PREFIX}${media.sha256}`;
+}
+
+function readTranscriptCache(media: SourceMedia): Word[] | null {
+  try {
+    const raw = localStorage.getItem(transcriptCacheKey(media));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { words?: Word[] };
+    return Array.isArray(parsed.words) ? parsed.words : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTranscriptCache(media: SourceMedia, words: Word[]) {
+  try {
+    localStorage.setItem(
+      transcriptCacheKey(media),
+      JSON.stringify({ mediaSha256: media.sha256, updatedAt: new Date().toISOString(), words }),
+    );
+  } catch {
+    // Cache failure should never block editing.
+  }
+}
+
+function cacheProjectTranscripts(project: Project) {
+  for (const media of Object.values(project.media)) {
+    const words = project.segments
+      .filter((segment) => segment.mediaId === media.id)
+      .flatMap((segment) => segment.words);
+    if (words.length > 0) writeTranscriptCache(media, words);
+  }
+}
+
 export function Toolbar() {
   const project = useProjectStore((s) => s.project);
   const dirty = useProjectStore((s) => s.dirty);
   const filePath = useProjectStore((s) => s.filePath);
-  const setProject = useProjectStore((s) => s.setProject);
   const markSaved = useProjectStore((s) => s.markSaved);
-  const closeProject = useProjectStore((s) => s.closeProject);
 
   const transcribeProgress = useUIStore((s) => s.transcribeProgress);
   const exportingProgress = useUIStore((s) => s.exportingProgress);
@@ -91,11 +133,14 @@ export function Toolbar() {
     try {
       const media = await importMedia(path);
       const name = media.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Untitled";
-      const nextProject = buildProjectWithMedia(newProject(name), media, []);
-      useProjectStore.temporal.getState().clear();
+      const cachedWords = readTranscriptCache(media);
+      const nextProject = buildProjectWithMedia(newProject(name), media, cachedWords ?? []);
       resetPlayer();
-      setProject(nextProject);
-      pushToast({ title: "Media imported", description: media.path });
+      replaceProjectBaseline(nextProject, { dirty: true, filePath: null });
+      pushToast({
+        title: cachedWords ? "Media imported with cached transcript" : "Media imported",
+        description: media.path,
+      });
     } catch (err) {
       pushToast({
         title: "Failed to import media",
@@ -112,8 +157,7 @@ export function Toolbar() {
   }
 
   function handleCloseProject() {
-    closeProject();
-    useProjectStore.temporal.getState().clear();
+    replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
     resetPlayer();
     pushToast({ title: "Project closed" });
   }
@@ -208,6 +252,7 @@ export function Toolbar() {
         modelName: selectedModel,
         mediaDuration: media.duration,
       });
+      writeTranscriptCache(media, result.words);
 
       // Replace the empty initial transcript with the real words.
       const next = {
@@ -223,7 +268,7 @@ export function Toolbar() {
         ],
         updatedAt: new Date().toISOString(),
       };
-      setProject(next);
+      replaceProjectBaseline(next, { dirty: true, filePath });
       pushToast({
         title: "Transcription complete",
         description: `${result.words.length} words`,
@@ -350,8 +395,7 @@ export function Toolbar() {
             variant="ghost"
             className="tool-button"
             onClick={() => {
-              setProject(newProject("Untitled"));
-              useProjectStore.temporal.getState().clear();
+              replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
               resetPlayer();
             }}
           >
@@ -369,8 +413,9 @@ export function Toolbar() {
               if (typeof path !== "string") return;
               try {
                 const loaded = await loadProject(path);
-                setProject(loaded);
-                markSaved(path);
+                cacheProjectTranscripts(loaded);
+                replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+                resetPlayer();
                 pushToast({ title: "Project opened", description: path });
               } catch (err) {
                 pushToast({

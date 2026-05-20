@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-20
+
+### Added
+- Transcript cache keyed by media hash so already-transcribed videos reopen with
+  their transcript without rerunning Whisper.
+- Transcript and timeline selection sync: marked timeline ranges now highlight
+  the matching words in the transcript.
+
+### Changed
+- Transcript editing is now selection-and-delete only. Users can select words
+  and remove the matching video range, but cannot type over or replace transcript
+  text.
+
+### Fixed
+- `Cmd+Z` no longer undoes media import, project open, or transcription loading.
+  Undo history now starts at intentional edit operations.
+- Common edit shortcuts guard against empty undo/redo stacks and selected-word
+  deletes clear the native text selection after the EDL update.
+
 ## [1.0.0] - 2026-05-20
 
 ### Added
