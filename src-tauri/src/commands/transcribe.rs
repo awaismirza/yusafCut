@@ -390,7 +390,7 @@ pub async fn transcribe(
         "-f".into(), wav_str,
         "--output-json-full".into(),
         "--word-thold".into(), "0.01".into(),
-        "-ml".into(), "1".into(),
+        "--split-on-word".into(),
     ];
     if !use_coreml {
         whisper_args.push("--no-gpu".into());

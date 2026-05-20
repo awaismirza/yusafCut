@@ -153,6 +153,39 @@ export function VideoPreview() {
     setPlaying(false);
   }, [setPlaying]);
 
+  const syncPlaybackClock = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || scrubbing) return;
+    const ids = Object.keys(project.media);
+    if (ids.length === 0) return;
+
+    if (!hasWords(project)) {
+      setCurrentTime(el.currentTime);
+      return;
+    }
+
+    const mediaId = ids[0]!;
+    const srcTime = el.currentTime;
+    const timeline = computeTimeline(project);
+    const entry = timeline.find(
+      (e) => e.mediaId === mediaId && srcTime >= e.sourceIn && srcTime < e.sourceOut,
+    );
+
+    if (entry) {
+      setCurrentTime(entry.outputStart + (srcTime - entry.sourceIn));
+      return;
+    }
+
+    const next = nextSurvivingSegment(project, mediaId, srcTime);
+    if (next) {
+      el.currentTime = next.sourceIn;
+      return;
+    }
+
+    el.pause();
+    setPlaying(false);
+  }, [project, scrubbing, setCurrentTime, setPlaying]);
+
   // ── Drive play/pause state from store ────────────────────────────────────
   useEffect(() => {
     const el = videoRef.current;
@@ -204,40 +237,7 @@ export function VideoPreview() {
     if (!el) return;
 
     function onTimeUpdate() {
-      if (!el || scrubbing) return;
-      const ids = Object.keys(project.media);
-      if (ids.length === 0) return;
-
-      // ── Free-play mode: no EDL constraints when there are no transcribed words ──
-      // This handles both the "no transcript yet" state and the case where all
-      // words have been deleted.
-      if (!hasWords(project)) {
-        setCurrentTime(el.currentTime);
-        return;
-      }
-
-      const mediaId = ids[0]!;
-      const srcTime = el.currentTime;
-      const timeline = computeTimeline(project);
-
-      const entry = timeline.find(
-        (e) => e.mediaId === mediaId && srcTime >= e.sourceIn && srcTime < e.sourceOut,
-      );
-
-      if (entry) {
-        const outputTime = entry.outputStart + (srcTime - entry.sourceIn);
-        setCurrentTime(outputTime);
-        return;
-      }
-
-      // In a deleted range → jump to next surviving segment.
-      const next = nextSurvivingSegment(project, mediaId, srcTime);
-      if (next) {
-        el.currentTime = next.sourceIn;
-      } else {
-        el.pause();
-        setPlaying(false);
-      }
+      syncPlaybackClock();
     }
 
     const onLoadedMetadata = () => {
@@ -279,7 +279,20 @@ export function VideoPreview() {
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
     };
-  }, [project, setCurrentTime, setPlaying, scrubbing]);
+  }, [setPlaying, syncPlaybackClock]);
+
+  useEffect(() => {
+    if (!playing) return;
+    let frame = 0;
+
+    const tick = () => {
+      syncPlaybackClock();
+      frame = window.requestAnimationFrame(tick);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [playing, syncPlaybackClock]);
 
   // ── Output-time seek helpers ──────────────────────────────────────────────
   const seekToOutputTime = useCallback(
