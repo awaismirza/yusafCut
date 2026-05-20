@@ -105,6 +105,13 @@ chmod +x "$DEST"
 BIN_SIZE=$(du -sh "$DEST" | awk '{print $1}')
 ok "Installed: $DEST ($BIN_SIZE)"
 
+# Tell git to ignore local changes to this file so the compiled Mach-O binary
+# is never accidentally staged or committed.  The repo tracks the tiny stub;
+# the real binary is ephemeral and rebuilt by this script when needed.
+git -C "$REPO" update-index --skip-worktree \
+    "src-tauri/binaries/whisperkit-cli-$ARCH_SUFFIX" 2>/dev/null || true
+ok "git skip-worktree set on whisperkit-cli — won't appear in 'git status'"
+
 # Quick smoke-test — just make sure it prints a help line instead of crashing.
 if "$DEST" --help 2>&1 | grep -qi "whisper\|transcribe\|usage"; then
   ok "Smoke-test passed (--help responded)"
