@@ -27,7 +27,9 @@ import {
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
+  Captions,
   CheckCircle2,
   Download,
   FilePlus2,
@@ -50,6 +52,7 @@ import {
   type Project,
   type Word,
 } from "@/lib/edl";
+import { buildSrt, buildVtt } from "@/lib/captions";
 import { usePlayerStore } from "@/stores/playerStore";
 import { Toolbox } from "@/components/Toolbox/Toolbox";
 import {
@@ -546,6 +549,44 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     setExportDialogOpen(true);
   }, [project, pushToast]);
 
+  // ── Caption export (SRT / VTT) ──────────────────────────────────────────
+  // Captions reflect the *output* timeline, so deletes and clip reordering
+  // carry over to the .srt/.vtt without the user having to think about it.
+  const handleExportCaptions = useCallback(async () => {
+    const hasWords = project.segments.some((s) => s.words.length > 0);
+    if (!hasWords) {
+      pushToast({
+        title: "No captions to export",
+        description: "Transcribe the clip first to generate word timings.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const outPath = await saveDialog({
+      defaultPath: `${project.name}.srt`,
+      filters: [
+        { name: "SubRip subtitles", extensions: ["srt"] },
+        { name: "WebVTT captions", extensions: ["vtt"] },
+      ],
+    });
+    if (!outPath) return;
+    const isVtt = outPath.toLowerCase().endsWith(".vtt");
+    try {
+      const content = isVtt ? buildVtt(project) : buildSrt(project);
+      await writeTextFile(outPath, content);
+      pushToast({
+        title: isVtt ? "WebVTT exported" : "SRT exported",
+        description: outPath,
+      });
+    } catch (err) {
+      pushToast({
+        title: "Caption export failed",
+        description: String(err),
+        variant: "destructive",
+      });
+    }
+  }, [project, pushToast]);
+
   useEffect(() => {
     window.addEventListener("scribe:save", handleSave);
     window.addEventListener("scribe:export", handleExport);
@@ -571,6 +612,15 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
         <div className="toolbar-export">
           <span className="toolbar-duration">{formatDuration(totalDuration(project))}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleExportCaptions}
+            className="h-8 gap-2 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+            title="Export captions (.srt or .vtt)"
+          >
+            <Captions className="h-4 w-4" /> Captions
+          </Button>
           <Button
             size="sm"
             onClick={handleExport}
