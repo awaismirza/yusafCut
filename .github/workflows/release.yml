@@ -1,0 +1,25 @@
+name: Release
+
+# This is a stub for the eventual release pipeline (spec Phase 7). It
+# code-signs, notarises, and uploads a .dmg + auto-update manifest to GitHub
+# Releases. Filled in once the team has a Developer ID set up; until then the
+# job is gated behind a manual workflow_dispatch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build + sign + notarise
+    runs-on: macos-14
+    if: false # disabled until signing is configured
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "TODO — see spec section 7 'Polish for MVP release'"

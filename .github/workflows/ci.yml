@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint / typecheck / test)
+    runs-on: macos-14 # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+  rust:
+    name: Rust (cargo test)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: cargo fmt --check
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --all-targets
+
+  build:
+    name: Tauri build (unsigned)
+    runs-on: macos-14
+    needs: [frontend, rust]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stage placeholder sidecar binaries
+        # Real builds will replace these via the release pipeline. For CI we
+        # write empty marker files so the bundler doesn't reject the config.
+        run: |
+          mkdir -p src-tauri/binaries
+          for bin in whisper-cli ffmpeg ffprobe; do
+            f="src-tauri/binaries/${bin}-aarch64-apple-darwin"
+            if [ ! -f "$f" ]; then
+              printf '#!/bin/sh\nexit 0\n' > "$f"
+              chmod +x "$f"
+            fi
+          done
+
+      - name: Build
+        run: npm run tauri:build -- --ci
+        env:
+          # Skip code signing in CI; the release pipeline (separate workflow)
+          # handles signing + notarisation.
+          TAURI_SKIP_DEVSERVER_CHECK: "true"

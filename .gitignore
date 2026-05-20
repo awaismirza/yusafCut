@@ -1,0 +1,51 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Vite
+.vite/
+
+# Build artefacts
+src-tauri/target/
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+!src-tauri/binaries/README.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Test
+coverage/
+
+# Tauri
+.tauri/
+*.dmg
+*.app
+*.app.tar.gz
+
+# Sidecar build outputs
+sidecars/**/dist/
+sidecars/**/build/
+sidecars/**/__pycache__/
+sidecars/**/*.egg-info/
+
+# Models (downloaded at runtime)
+models/
+*.bin
+*.mlmodelc
+*.mlmodelc.zip
+
+# Misc
+.env
+.env.local
