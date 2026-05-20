@@ -108,10 +108,10 @@ impl WhisperModel {
 
 /// WhisperKit models available for download.
 ///
-/// These are the `.mlpackage` bundles published by Argmax at
+/// These are the `.mlmodelc` bundles published by Argmax at
 /// `huggingface.co/argmaxinc/whisperkit-coreml`. Each "model repo" is a
-/// directory that contains `AudioEncoder.mlpackage`, `TextDecoder.mlpackage`,
-/// and supporting files.
+/// directory that contains `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`,
+/// `TextDecoder.mlmodelc`, `config.json`, and `generation_config.json`.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum WhisperKitModel {
@@ -149,20 +149,15 @@ impl WhisperKitModel {
         self.repo_name()
     }
 
-    /// Approximate download size in MiB (AudioEncoder + TextDecoder combined).
+    /// Approximate download size in MiB (all `.mlmodelc` bundles combined).
     pub fn size_mb(self) -> u64 {
         match self {
-            WhisperKitModel::Tiny => 95,
+            WhisperKitModel::Tiny => 77,
             WhisperKitModel::Base => 190,
             WhisperKitModel::Small => 640,
             WhisperKitModel::LargeV3Turbo => 1700,
-            WhisperKitModel::LargeV3 => 3900,
+            WhisperKitModel::LargeV3 => 3090,
         }
-    }
-
-    /// The two `.mlpackage` component files that must be downloaded.
-    pub fn package_files(self) -> &'static [&'static str] {
-        &["AudioEncoder.mlpackage", "TextDecoder.mlpackage"]
     }
 }
 
@@ -274,7 +269,7 @@ pub async fn list_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
         });
     }
 
-    // — WhisperKit .mlpackage models —
+    // — WhisperKit .mlmodelc models —
     let wk_dir = whisperkit_models_dir(&app)?;
     for &m in &[
         WhisperKitModel::Tiny,
@@ -283,12 +278,9 @@ pub async fn list_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
         WhisperKitModel::LargeV3Turbo,
         WhisperKitModel::LargeV3,
     ] {
-        // "installed" = local dir exists and contains both mlpackages
+        // "installed" = config.json sentinel present (written last by download)
         let model_dir = wk_dir.join(m.local_dir());
-        let installed = m
-            .package_files()
-            .iter()
-            .all(|f| model_dir.join(f).exists());
+        let installed = model_dir.join("config.json").exists();
         out.push(ModelInfo {
             engine: TranscriptionEngine::WhisperKit,
             name: m.repo_name().to_string(),
@@ -394,32 +386,101 @@ async fn download_whisper_cpp_model(
     Ok(())
 }
 
-/// Download WhisperKit `.mlpackage` bundles for a given model from Argmax's
+/// A single entry returned by the HuggingFace tree API.
+#[derive(Debug, Deserialize)]
+struct HfTreeEntry {
+    /// `"file"` or `"directory"`.
+    #[serde(rename = "type")]
+    kind: String,
+    /// Repo-relative path, e.g. `"openai_whisper-tiny/config.json"`.
+    path: String,
+}
+
+/// Return every *file* path under `repo_path` in `argmaxinc/whisperkit-coreml`,
+/// by calling the HuggingFace tree API with `?recursive=true`.
+async fn list_hf_model_files(repo_path: &str) -> Result<Vec<String>, String> {
+    let url = format!(
+        "https://huggingface.co/api/models/argmaxinc/whisperkit-coreml/tree/main/{}?recursive=true",
+        repo_path
+    );
+    let client = reqwest::Client::builder()
+        .user_agent("scribe/2.3")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("HF tree API request failed: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "HF tree API returned {}: {}",
+            resp.status(),
+            url
+        ));
+    }
+    let entries: Vec<HfTreeEntry> = resp
+        .json()
+        .await
+        .map_err(|e| format!("HF tree API JSON parse failed: {e}"))?;
+    Ok(entries
+        .into_iter()
+        .filter(|e| e.kind == "file")
+        .map(|e| e.path)
+        .collect())
+}
+
+/// Download WhisperKit `.mlmodelc` bundles for a given model from Argmax's
 /// HuggingFace repository (`argmaxinc/whisperkit-coreml`).
 ///
-/// Each model is a directory in the repo; we download the two main package
-/// archives (`AudioEncoder.mlpackage` and `TextDecoder.mlpackage`) via the
-/// HuggingFace resolve endpoint.
+/// `.mlmodelc` bundles are *directories* (not single files), so we enumerate
+/// every file under the model subdirectory via the HuggingFace tree API, then
+/// download each file individually while preserving the directory structure.
+///
+/// `config.json` is downloaded last; its presence on disk is the sentinel that
+/// `list_models()` uses to declare the model installed.
 async fn download_whisperkit_model(
     app: &AppHandle,
     model: WhisperKitModel,
 ) -> Result<(), String> {
     let base_dir = whisperkit_models_dir(app)?;
     let model_dir = base_dir.join(model.local_dir());
-    fs::create_dir_all(&model_dir)
-        .await
-        .map_err(|e| e.to_string())?;
 
-    let files = model.package_files();
-    let n = files.len() as f64;
+    // Enumerate every file in the model directory.
+    let all_files = list_hf_model_files(model.repo_name()).await?;
+    if all_files.is_empty() {
+        return Err(format!(
+            "No files found for model {} — check argmaxinc/whisperkit-coreml on HuggingFace",
+            model.repo_name()
+        ));
+    }
 
-    for (i, &filename) in files.iter().enumerate() {
+    // Sort so config.json is last (it's our "installed" sentinel).
+    let mut sorted = all_files;
+    sorted.sort_by_key(|p| if p.ends_with("config.json") { 1 } else { 0 });
+
+    let n = sorted.len() as f64;
+    let prefix = format!("{}/", model.repo_name());
+
+    for (i, repo_relative_path) in sorted.iter().enumerate() {
+        // Strip the model-directory prefix to get the file's local relative path.
+        let local_relative = repo_relative_path
+            .strip_prefix(&prefix)
+            .unwrap_or(repo_relative_path);
+
+        let dest = model_dir.join(local_relative);
+
+        // Ensure parent directories exist (e.g. AudioEncoder.mlmodelc/weights/).
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("create_dir_all {}: {e}", parent.display()))?;
+        }
+
         let url = format!(
-            "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/main/{}/{}",
-            model.repo_name(),
-            filename
+            "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/main/{}",
+            repo_relative_path
         );
-        let dest = model_dir.join(filename);
         let scale = 1.0 / n;
         let offset = i as f64 / n;
         download_hf_file(app, &url, &dest, model.repo_name(), scale, offset).await?;
