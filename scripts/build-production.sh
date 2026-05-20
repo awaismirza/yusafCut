@@ -161,6 +161,13 @@ chmod +x "$SIDECAR_BIN"
 BIN_SIZE=$(du -sh "$SIDECAR_BIN" | awk '{print $1}')
 ok "sidecar binary verified (${BIN_SIZE})"
 
+# Tell git to ignore local changes to this file so the 60 MB PyInstaller
+# binary is never accidentally staged or committed.  The repo tracks the
+# 1 KB dev shell-script launcher; the production binary is ephemeral.
+git -C "$REPO" update-index --skip-worktree \
+    "src-tauri/binaries/mlx-sidecar-$ARCH_SUFFIX" 2>/dev/null || true
+ok "git skip-worktree set on mlx-sidecar — won't appear in 'git status'"
+
 # Check whisper-cli is present (transcription won't work without it)
 WHISPER_BIN="$BINS/whisper-cli-$ARCH_SUFFIX"
 if [[ ! -x "$WHISPER_BIN" ]]; then
