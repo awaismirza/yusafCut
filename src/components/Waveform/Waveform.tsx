@@ -22,6 +22,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   computeTimeline,
   outputTimeToSource,
+  projectChapters,
   totalDuration,
   wordIdsInOutputRange,
   type Word,
@@ -446,6 +447,24 @@ export function Waveform() {
               <span>O</span>
             </div>
           )}
+          {projectChapters(project).map((chapter) => {
+            const leftPx = chapter.outputTime * pxPerSecond;
+            return (
+              <div
+                key={chapter.id}
+                className="timeline-chapter"
+                style={{ left: leftPx }}
+                title={`${chapter.title} (${chapter.outputTime.toFixed(2)}s) — click to jump`}
+                onMouseDown={(e) => {
+                  // Stop the rail drag from starting; treat as a chapter click.
+                  e.stopPropagation();
+                  seekToOutputTime(chapter.outputTime);
+                }}
+              >
+                <span>{chapter.title}</span>
+              </div>
+            );
+          })}
           <div className="timeline-playhead" style={{ left: playheadLeftPx }}>
             <span />
           </div>

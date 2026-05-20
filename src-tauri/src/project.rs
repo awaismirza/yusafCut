@@ -56,6 +56,7 @@ mod tests {
                 export_preset: ExportPreset::Youtube1080p,
                 padding_ms: 80,
             },
+            chapters: vec![],
         }
     }
 

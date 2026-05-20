@@ -60,6 +60,16 @@ pub struct ProjectSettings {
     pub padding_ms: u32,
 }
 
+/// A named jump-point on the OUTPUT timeline. Used during export to write
+/// ffmetadata `[CHAPTER]` blocks (YouTube / Apple-Podcasts compatible).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Chapter {
+    pub id: String,
+    #[serde(rename = "outputTime")]
+    pub output_time: f64,
+    pub title: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub version: u32,
@@ -72,6 +82,9 @@ pub struct Project {
     pub media: HashMap<MediaId, SourceMedia>,
     pub segments: Vec<Segment>,
     pub settings: ProjectSettings,
+    /// Optional — older v2.0 projects deserialise with `chapters = Vec::new()`.
+    #[serde(default)]
+    pub chapters: Vec<Chapter>,
 }
 
 #[cfg(test)]
@@ -92,6 +105,7 @@ mod tests {
                 export_preset: ExportPreset::Youtube1080p,
                 padding_ms: 80,
             },
+            chapters: vec![],
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Project = serde_json::from_str(&json).unwrap();

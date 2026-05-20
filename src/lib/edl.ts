@@ -50,6 +50,14 @@ export interface ProjectSettings {
   paddingMs: number; // default audio padding around cuts
 }
 
+/** A named jump-point on the OUTPUT timeline. Used for YouTube/podcast chapters. */
+export interface Chapter {
+  id: string;
+  /** Position in seconds on the *output* timeline (post-edits). */
+  outputTime: number;
+  title: string;
+}
+
 export interface Project {
   version: 1;
   id: string;
@@ -59,6 +67,8 @@ export interface Project {
   media: Record<MediaId, SourceMedia>;
   segments: Segment[];
   settings: ProjectSettings;
+  /** Optional — older v2.0 projects don't have this field. Empty by default. */
+  chapters?: Chapter[];
 }
 
 export interface TimelineEntry {
@@ -452,6 +462,42 @@ export function addMediaWithTranscript(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Chapters — pure helpers. All return a new Project; never mutate.
+// ---------------------------------------------------------------------------
+
+/** Read chapters defensively — handles older projects without the field. */
+export function projectChapters(project: Project): Chapter[] {
+  return project.chapters ?? [];
+}
+
+/** Add a chapter at the given output-time. Returns a new project; chapters are
+ * stored in ascending outputTime order so the timeline and exporter don't have
+ * to re-sort. Duplicate times are allowed (one wins; the user can rename). */
+export function addChapter(project: Project, outputTime: number, title = "Chapter"): Project {
+  const id = uuidv4();
+  const chapter: Chapter = {
+    id,
+    outputTime: Math.max(0, Math.min(outputTime, totalDuration(project))),
+    title: title.trim() || "Chapter",
+  };
+  const next = [...projectChapters(project), chapter].sort((a, b) => a.outputTime - b.outputTime);
+  return { ...project, chapters: next, updatedAt: new Date().toISOString() };
+}
+
+export function removeChapter(project: Project, id: string): Project {
+  const next = projectChapters(project).filter((c) => c.id !== id);
+  if (next.length === projectChapters(project).length) return project;
+  return { ...project, chapters: next, updatedAt: new Date().toISOString() };
+}
+
+export function renameChapter(project: Project, id: string, title: string): Project {
+  const next = projectChapters(project).map((c) =>
+    c.id === id ? { ...c, title: title.trim() || "Chapter" } : c,
+  );
+  return { ...project, chapters: next, updatedAt: new Date().toISOString() };
+}
+
 /** Create a brand new empty project. */
 export function newProject(name: string): Project {
   const now = new Date().toISOString();
@@ -467,5 +513,6 @@ export function newProject(name: string): Project {
       exportPreset: "youtube-1080p",
       paddingMs: DEFAULT_PADDING_MS,
     },
+    chapters: [],
   };
 }

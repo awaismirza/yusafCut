@@ -5,10 +5,14 @@ import {
   deleteWords,
   findWord,
   findWordAtSourceTime,
+  addChapter,
   newProject,
   nextSurvivingSegment,
   outputTimeToSource,
+  projectChapters,
+  removeChapter,
   removeSilences,
+  renameChapter,
   sourceTimeToOutput,
   splitSegmentAtWord,
   totalDuration,
@@ -505,6 +509,56 @@ describe("EDL — pure functions", () => {
       const [again, removed2] = removeSilences(trimmed);
       expect(removed2).toBe(0);
       expect(again).toBe(trimmed);
+    });
+  });
+
+  describe("chapters", () => {
+    const seed = () =>
+      addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 30 }),
+        makeWords([
+          ["a", 0, 1],
+          ["b", 1, 2],
+          ["c", 2, 3],
+        ]),
+      );
+
+    it("starts empty and reads defensively when missing", () => {
+      const p = seed();
+      expect(projectChapters(p)).toEqual([]);
+      // Simulate a v2.0 project loaded from disk without a chapters field.
+      const legacy: typeof p = { ...p };
+      delete (legacy as { chapters?: unknown }).chapters;
+      expect(projectChapters(legacy)).toEqual([]);
+    });
+
+    it("inserts chapters sorted by outputTime", () => {
+      let p = seed();
+      p = addChapter(p, 12, "Outro");
+      p = addChapter(p, 3, "Intro");
+      p = addChapter(p, 7, "Middle");
+      const titles = projectChapters(p).map((c) => c.title);
+      expect(titles).toEqual(["Intro", "Middle", "Outro"]);
+    });
+
+    it("clamps the chapter time into the project's output range", () => {
+      const p = addChapter(seed(), 9999, "Past end");
+      expect(projectChapters(p)[0]!.outputTime).toBe(totalDuration(seed()));
+    });
+
+    it("removeChapter is a no-op for unknown ids", () => {
+      const p = addChapter(seed(), 1, "x");
+      const before = p;
+      const after = removeChapter(p, "no-such-id");
+      expect(after).toBe(before);
+    });
+
+    it("renameChapter falls back to 'Chapter' for empty titles", () => {
+      let p = addChapter(seed(), 1, "first");
+      const id = projectChapters(p)[0]!.id;
+      p = renameChapter(p, id, "   ");
+      expect(projectChapters(p)[0]!.title).toBe("Chapter");
     });
   });
 });

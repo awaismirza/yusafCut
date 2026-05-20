@@ -870,6 +870,40 @@
   border-right: 6px solid transparent;
   border-top: 10px solid hsl(var(--primary));
 }
+/* Chapter pin on the timeline — small flag with title tooltip. */
+.timeline-chapter {
+  position: absolute;
+  top: 28px;
+  bottom: 12px;
+  width: 0;
+  border-left: 2px solid hsl(40 85% 60%);
+  filter: drop-shadow(0 0 4px hsl(40 85% 60% / 0.35));
+  cursor: pointer;
+}
+.timeline-chapter span {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  padding: 1px 6px;
+  background: hsl(40 85% 60%);
+  color: hsl(30 20% 10%);
+  font:
+    600 10px/1.2 ui-sans-serif,
+    system-ui,
+    sans-serif;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.timeline-chapter:hover {
+  border-left-color: hsl(40 95% 70%);
+}
+.timeline-chapter:hover span {
+  background: hsl(40 95% 70%);
+}
 /* Minimap shown above the rail when zoomed in. Gives orientation while panning. */
 .timeline-minimap {
   position: relative;
