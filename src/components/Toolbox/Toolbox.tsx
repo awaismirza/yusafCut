@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button";
 import { wordIdsInOutputRange } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore } from "@/stores/projectStore";
-import { Flag, MousePointer2, RotateCcw, Search, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
+import { Flag, MousePointer2, RotateCcw, Scissors, Search, X, ZoomIn, ZoomOut } from "lucide-react";
 
 interface ToolboxProps {
   onFindClick?: () => void;
@@ -10,6 +11,8 @@ interface ToolboxProps {
 
 export function Toolbox({ onFindClick }: ToolboxProps) {
   const project = useProjectStore((s) => s.project);
+  const removeSilences = useProjectStore((s) => s.removeSilences);
+  const pushToast = useUIStore((s) => s.pushToast);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const timelineMarkIn = usePlayerStore((s) => s.timelineMarkIn);
   const timelineMarkOut = usePlayerStore((s) => s.timelineMarkOut);
@@ -36,6 +39,21 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   function clearMarkers() {
     clearTimelineRange();
     setSelectedWordIds([]);
+  }
+
+  function handleRemoveSilences() {
+    const removed = removeSilences();
+    if (removed === 0) {
+      pushToast({
+        title: "Nothing to trim",
+        description: "No silences longer than 600ms found between words.",
+      });
+      return;
+    }
+    pushToast({
+      title: `Trimmed ${removed} silence${removed === 1 ? "" : "s"}`,
+      description: "Use ⌘Z to restore.",
+    });
   }
 
   return (
@@ -92,6 +110,19 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
       >
         <X className="h-4 w-4" />
         Clear
+      </Button>
+      <span className="toolbox-divider" />
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="toolbox-clear-button"
+        title="Trim silences longer than 600ms between words"
+        onClick={handleRemoveSilences}
+        disabled={!project.segments.some((s) => s.words.length > 1)}
+      >
+        <Scissors className="h-4 w-4" />
+        Trim silences
       </Button>
       <span className="toolbox-divider" />
       <Button

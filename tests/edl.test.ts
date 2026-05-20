@@ -8,6 +8,7 @@ import {
   newProject,
   nextSurvivingSegment,
   outputTimeToSource,
+  removeSilences,
   sourceTimeToOutput,
   splitSegmentAtWord,
   totalDuration,
@@ -414,6 +415,96 @@ describe("EDL — pure functions", () => {
         .find((w) => w.id === "w-0")!;
       expect(aAfter.start).toBe(aOriginal.start);
       expect(aAfter.end).toBe(aOriginal.end);
+    });
+  });
+
+  describe("removeSilences", () => {
+    it("returns [project, 0] when there are no gaps", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia(),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 0.55, 1.0],
+          ["c", 1.05, 1.4],
+        ]),
+      );
+      const [next, removed] = removeSilences(p, { gapMs: 600 });
+      expect(removed).toBe(0);
+      expect(next).toBe(p);
+    });
+
+    it("splits a segment at gaps longer than the threshold", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 20 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 0.55, 1.0],
+          // 2s silence here
+          ["c", 3.0, 3.5],
+          ["d", 3.55, 4.0],
+        ]),
+      );
+      const [next, removed] = removeSilences(p, { gapMs: 600, paddingMs: 80 });
+      expect(removed).toBe(1);
+      expect(next.segments).toHaveLength(2);
+      expect(next.segments[0]!.words.map((w) => w.text)).toEqual(["a", "b"]);
+      expect(next.segments[1]!.words.map((w) => w.text)).toEqual(["c", "d"]);
+      // The first run keeps its leading original boundary, the second run
+      // starts no earlier than (c.start - padding).
+      expect(next.segments[0]!.sourceIn).toBe(0);
+      expect(next.segments[0]!.sourceOut).toBeCloseTo(1.08, 5);
+      expect(next.segments[1]!.sourceIn).toBeCloseTo(2.92, 5);
+      expect(next.segments[1]!.sourceOut).toBe(20);
+    });
+
+    it("removes multiple silences in a single segment", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 30 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 5, 5.5],
+          ["c", 10, 10.5],
+          ["d", 15, 15.5],
+        ]),
+      );
+      const [next, removed] = removeSilences(p, { gapMs: 600 });
+      expect(removed).toBe(3);
+      expect(next.segments).toHaveLength(4);
+    });
+
+    it("collapses output duration after silence removal", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 20 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 0.55, 1.0],
+          ["c", 10, 10.5],
+        ]),
+      );
+      const beforeDuration = totalDuration(p);
+      const [next, removed] = removeSilences(p, { gapMs: 600 });
+      expect(removed).toBe(1);
+      expect(totalDuration(next)).toBeLessThan(beforeDuration);
+    });
+
+    it("is idempotent once all gaps are gone", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 20 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 5, 5.5],
+        ]),
+      );
+      const [trimmed, removed1] = removeSilences(p);
+      expect(removed1).toBe(1);
+      const [again, removed2] = removeSilences(trimmed);
+      expect(removed2).toBe(0);
+      expect(again).toBe(trimmed);
     });
   });
 });

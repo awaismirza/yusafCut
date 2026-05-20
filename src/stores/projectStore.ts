@@ -14,6 +14,7 @@ import {
   addMediaWithTranscript,
   deleteWords,
   newProject,
+  removeSilences,
   wordIdsInOutputRange,
   type Project,
   type SourceMedia,
@@ -43,6 +44,9 @@ interface ProjectState {
     replace: string,
     opts?: { caseSensitive?: boolean; wholeWord?: boolean },
   ) => number;
+  /** Cut every silence longer than `gapMs` between surviving words.
+   *  Returns the count of silences removed (0 = nothing to do). */
+  removeSilences: (gapMs?: number) => number;
   markSaved: (path: string) => void;
   closeProject: () => void;
 }
@@ -155,6 +159,14 @@ export const useProjectStore = create<ProjectState>()(
           dirty: true,
         });
         return replaced;
+      },
+
+      removeSilences: (gapMs) => {
+        const project = _get().project;
+        const [next, removed] = removeSilences(project, gapMs ? { gapMs } : undefined);
+        if (removed === 0) return 0;
+        set({ project: next, dirty: true });
+        return removed;
       },
 
       markSaved: (path) => set({ dirty: false, filePath: path }),
