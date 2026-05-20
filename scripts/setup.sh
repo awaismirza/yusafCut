@@ -16,8 +16,9 @@
 #   3. Python venv        (sidecars/mlx-llm/.venv)
 #   4. FFmpeg / FFprobe   (downloads static builds from evermeet.cx)
 #   5. whisper-cli        (check — must be built manually, see below)
-#   6. whisperkit-cli     (stub is bundled — no action needed)
-#   7. Final status table
+#   6. whisperkit-cli     (builds from argmaxinc/WhisperKit via Swift if stub detected)
+#   7. MLX sidecar        (checks dev launcher is present)
+#   8. Final status table
 # =============================================================================
 set -euo pipefail
 
