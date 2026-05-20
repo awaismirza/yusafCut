@@ -119,6 +119,16 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      // 'B' adds a chapter at the playhead — matches Final Cut Pro's reflex.
+      if (e.key.toLowerCase() === "b" && !inTextField && !mod) {
+        const s = usePlayerStore.getState();
+        const projectStore = useProjectStore.getState();
+        if (projectStore.project.segments.length === 0) return;
+        e.preventDefault();
+        projectStore.addChapter(s.currentTime);
+        return;
+      }
+
       if (e.key.toLowerCase() === "x" && !inTextField) {
         const s = usePlayerStore.getState();
         if (s.timelineMarkIn === null && s.timelineMarkOut === null && s.selectedWordIds.size === 0)

@@ -11,9 +11,13 @@
 import { temporal, type TemporalState } from "zundo";
 import { create, useStore } from "zustand";
 import {
+  addChapter,
   addMediaWithTranscript,
   deleteWords,
   newProject,
+  removeChapter,
+  removeSilences,
+  renameChapter,
   wordIdsInOutputRange,
   type Project,
   type SourceMedia,
@@ -43,6 +47,13 @@ interface ProjectState {
     replace: string,
     opts?: { caseSensitive?: boolean; wholeWord?: boolean },
   ) => number;
+  /** Cut every silence longer than `gapMs` between surviving words.
+   *  Returns the count of silences removed (0 = nothing to do). */
+  removeSilences: (gapMs?: number) => number;
+  /** Chapter ops on the OUTPUT timeline. */
+  addChapter: (outputTime: number, title?: string) => void;
+  removeChapter: (id: string) => void;
+  renameChapter: (id: string, title: string) => void;
   markSaved: (path: string) => void;
   closeProject: () => void;
 }
@@ -156,6 +167,21 @@ export const useProjectStore = create<ProjectState>()(
         });
         return replaced;
       },
+
+      removeSilences: (gapMs) => {
+        const project = _get().project;
+        const [next, removed] = removeSilences(project, gapMs ? { gapMs } : undefined);
+        if (removed === 0) return 0;
+        set({ project: next, dirty: true });
+        return removed;
+      },
+
+      addChapter: (outputTime, title) =>
+        set((s) => ({ project: addChapter(s.project, outputTime, title), dirty: true })),
+      removeChapter: (id) =>
+        set((s) => ({ project: removeChapter(s.project, id), dirty: true })),
+      renameChapter: (id, title) =>
+        set((s) => ({ project: renameChapter(s.project, id, title), dirty: true })),
 
       markSaved: (path) => set({ dirty: false, filePath: path }),
 

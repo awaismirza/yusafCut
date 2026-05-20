@@ -2,7 +2,19 @@ import { Button } from "@/components/ui/button";
 import { wordIdsInOutputRange } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore } from "@/stores/projectStore";
-import { Flag, MousePointer2, RotateCcw, Search, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
+import {
+  Bookmark,
+  Flag,
+  MousePointer2,
+  RotateCcw,
+  Scissors,
+  Search,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import { projectChapters } from "@/lib/edl";
 
 interface ToolboxProps {
   onFindClick?: () => void;
@@ -10,6 +22,10 @@ interface ToolboxProps {
 
 export function Toolbox({ onFindClick }: ToolboxProps) {
   const project = useProjectStore((s) => s.project);
+  const removeSilences = useProjectStore((s) => s.removeSilences);
+  const addChapter = useProjectStore((s) => s.addChapter);
+  const pushToast = useUIStore((s) => s.pushToast);
+  const chapterCount = projectChapters(project).length;
   const currentTime = usePlayerStore((s) => s.currentTime);
   const timelineMarkIn = usePlayerStore((s) => s.timelineMarkIn);
   const timelineMarkOut = usePlayerStore((s) => s.timelineMarkOut);
@@ -36,6 +52,34 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   function clearMarkers() {
     clearTimelineRange();
     setSelectedWordIds([]);
+  }
+
+  function handleRemoveSilences() {
+    const removed = removeSilences();
+    if (removed === 0) {
+      pushToast({
+        title: "Nothing to trim",
+        description: "No silences longer than 600ms found between words.",
+      });
+      return;
+    }
+    pushToast({
+      title: `Trimmed ${removed} silence${removed === 1 ? "" : "s"}`,
+      description: "Use ⌘Z to restore.",
+    });
+  }
+
+  function handleAddChapter() {
+    // Prompts feel out of place in a pro NLE but we'll deliver the lightweight
+    // version here; a proper inline chapter list is on the roadmap.
+    const defaultTitle = `Chapter ${chapterCount + 1}`;
+    const title = window.prompt("Chapter title", defaultTitle) ?? defaultTitle;
+    if (title === null) return;
+    addChapter(currentTime, title);
+    pushToast({
+      title: "Chapter added",
+      description: `${title} at ${currentTime.toFixed(2)}s`,
+    });
   }
 
   return (
@@ -96,6 +140,31 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
       <span className="toolbox-divider" />
       <Button
         type="button"
+        size="sm"
+        variant="ghost"
+        className="toolbox-clear-button"
+        title="Trim silences longer than 600ms between words"
+        onClick={handleRemoveSilences}
+        disabled={!project.segments.some((s) => s.words.length > 1)}
+      >
+        <Scissors className="h-4 w-4" />
+        Trim silences
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="toolbox-clear-button"
+        title="Add chapter at playhead (B)"
+        onClick={handleAddChapter}
+        disabled={project.segments.length === 0}
+      >
+        <Bookmark className="h-4 w-4" />
+        {chapterCount > 0 ? `Chapter (${chapterCount})` : "Chapter"}
+      </Button>
+      <span className="toolbox-divider" />
+      <Button
+        type="button"
         size="icon"
         variant="ghost"
         className="toolbox-button"
@@ -123,7 +192,7 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
         className="toolbox-button"
         title="Zoom in timeline"
         onClick={() => setTimelineZoom(timelineZoom * 1.5)}
-        disabled={timelineZoom >= 7.99}
+        disabled={timelineZoom >= 31.99}
       >
         <ZoomIn className="h-4 w-4" />
       </Button>

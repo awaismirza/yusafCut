@@ -7,13 +7,14 @@
 //!
 //! Smart-cut (re-encode only at boundaries) is deferred to v1.1 per spec §6.7.
 
-use crate::edl::{ExportPreset, Project};
+use crate::edl::{Chapter, ExportPreset, Project};
 use crate::AppState;
 use serde::Deserialize;
 use std::fmt::Write as _;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use tokio::fs;
 
 #[derive(Debug, Deserialize)]
 pub struct ExportOpts {
@@ -65,6 +66,31 @@ pub async fn export_video(
         return Err("nothing to export — EDL is empty".into());
     }
 
+    // Compute total output duration up-front — needed both for the chapter
+    // metadata and for progress reporting later.
+    let total_duration = opts
+        .project
+        .segments
+        .iter()
+        .map(|s| (s.source_out - s.source_in).max(0.0))
+        .sum::<f64>()
+        .max(0.001);
+
+    // Build the ffmetadata file (chapters) — only if any chapters exist.
+    // The file is written to the system temp dir and removed after ffmpeg exits.
+    let chapter_metadata = if opts.project.chapters.is_empty() {
+        None
+    } else {
+        let path = tempfile_with_ext("ffmeta.txt");
+        let body = build_chapter_ffmetadata(&opts.project.chapters, total_duration);
+        if let Err(err) = fs::write(&path, body).await {
+            log::warn!("failed to write chapter ffmetadata: {err}");
+            None
+        } else {
+            Some(path)
+        }
+    };
+
     // Build the filter graph: trim each segment, then concat.
     let mut filter = String::new();
     let mut concat_inputs = String::new();
@@ -104,6 +130,14 @@ pub async fn export_video(
         argv.push("-i".into());
         argv.push(path.to_string());
     }
+    // Chapter metadata is fed as one extra non-media input. -map_metadata <idx>
+    // copies its global chapter info onto the output without disturbing video/audio.
+    let chapter_input_index: Option<usize> = chapter_metadata.as_ref().map(|p| {
+        let idx = inputs.len();
+        argv.push("-i".into());
+        argv.push(p.to_string_lossy().to_string());
+        idx
+    });
     argv.push("-filter_complex".into());
     argv.push(filter);
 
@@ -119,6 +153,14 @@ pub async fn export_video(
             argv.push("-map".into());
             argv.push("[outa]".into());
         }
+    }
+
+    // After -map (which scopes the streams) but before codec args, copy the
+    // chapter info onto the output. -map_metadata uses *file* index, hence the
+    // index we recorded when we appended -i.
+    if let Some(idx) = chapter_input_index {
+        argv.push("-map_metadata".into());
+        argv.push(idx.to_string());
     }
 
     // Preset → codec / bitrate
@@ -175,14 +217,7 @@ pub async fn export_video(
     let (mut rx, child) = cmd.spawn().map_err(|e| format!("spawn ffmpeg: {e}"))?;
     *state.export.child.lock().await = Some(child);
 
-    let total_duration = opts
-        .project
-        .segments
-        .iter()
-        .map(|s| (s.source_out - s.source_in).max(0.0))
-        .sum::<f64>()
-        .max(0.001);
-
+    // `total_duration` is computed earlier (chapters use it too).
     while let Some(ev) = rx.recv().await {
         match ev {
             CommandEvent::Stdout(buf) => {
@@ -213,6 +248,9 @@ pub async fn export_video(
             CommandEvent::Stderr(_) => { /* ffmpeg writes a lot of stuff here; ignore */ }
             CommandEvent::Terminated(t) => {
                 *state.export.child.lock().await = None;
+                if let Some(p) = &chapter_metadata {
+                    let _ = fs::remove_file(p).await;
+                }
                 if t.code != Some(0) {
                     return Err(format!("ffmpeg exited with code {:?}", t.code));
                 }
@@ -225,7 +263,51 @@ pub async fn export_video(
         }
     }
 
+    if let Some(p) = &chapter_metadata {
+        let _ = fs::remove_file(p).await;
+    }
     Ok(())
+}
+
+/// Build an FFmetadata file containing one [CHAPTER] block per chapter.
+/// ffmpeg expects per-chapter START/END in TIMEBASE units; we use 1/1000 so
+/// times are simply integer milliseconds. The exporter clamps end-of-file
+/// using the total output duration so the last chapter gets a sensible END.
+fn build_chapter_ffmetadata(chapters: &[Chapter], total_duration_sec: f64) -> String {
+    // Sort defensively — the frontend already sorts, but a manually-edited
+    // .scribe file could be out of order.
+    let mut sorted: Vec<&Chapter> = chapters.iter().collect();
+    sorted.sort_by(|a, b| a.output_time.partial_cmp(&b.output_time).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut out = String::from(";FFMETADATA1\n");
+    for (i, c) in sorted.iter().enumerate() {
+        let start_ms = (c.output_time.max(0.0) * 1000.0).round() as u64;
+        let end_ms = if i + 1 < sorted.len() {
+            (sorted[i + 1].output_time.max(0.0) * 1000.0).round() as u64
+        } else {
+            (total_duration_sec.max(c.output_time) * 1000.0).round() as u64
+        };
+        // Chapter blocks need title on its own line; escape backslashes/=.
+        let safe_title = c
+            .title
+            .replace('\\', "\\\\")
+            .replace('=', "\\=")
+            .replace(';', "\\;")
+            .replace('#', "\\#")
+            .replace('\n', " ");
+        let _ = writeln!(out, "[CHAPTER]");
+        let _ = writeln!(out, "TIMEBASE=1/1000");
+        let _ = writeln!(out, "START={start_ms}");
+        let _ = writeln!(out, "END={end_ms}");
+        let _ = writeln!(out, "title={safe_title}");
+    }
+    out
+}
+
+fn tempfile_with_ext(ext: &str) -> std::path::PathBuf {
+    let mut p = std::env::temp_dir();
+    p.push(format!("scribe-{}.{}", uuid::Uuid::new_v4(), ext));
+    p
 }
 
 #[tauri::command]
@@ -327,6 +409,7 @@ mod tests {
                 export_preset: ExportPreset::Youtube1080p,
                 padding_ms: 80,
             },
+            chapters: vec![],
         }
     }
 
@@ -336,5 +419,34 @@ mod tests {
         assert!(filter.contains("[0:v]trim=start=0:end=2"));
         assert!(filter.contains("[0:v]trim=start=5:end=7"));
         assert!(filter.contains("concat=n=2:v=1:a=1[outv][outa]"));
+    }
+
+    #[test]
+    fn ffmetadata_emits_one_block_per_chapter_with_ms_timebase() {
+        use crate::edl::Chapter;
+        let chapters = vec![
+            Chapter { id: "1".into(), output_time: 0.0, title: "Intro".into() },
+            Chapter { id: "2".into(), output_time: 12.5, title: "Demo".into() },
+        ];
+        let text = super::build_chapter_ffmetadata(&chapters, 30.0);
+        assert!(text.starts_with(";FFMETADATA1\n"));
+        assert_eq!(text.matches("[CHAPTER]").count(), 2);
+        assert!(text.contains("TIMEBASE=1/1000"));
+        assert!(text.contains("START=0\nEND=12500"));
+        assert!(text.contains("START=12500\nEND=30000"));
+        assert!(text.contains("title=Intro"));
+        assert!(text.contains("title=Demo"));
+    }
+
+    #[test]
+    fn ffmetadata_escapes_special_characters_in_titles() {
+        use crate::edl::Chapter;
+        let chapters = vec![Chapter {
+            id: "1".into(),
+            output_time: 0.0,
+            title: "a=b;c#d\\e".into(),
+        }];
+        let text = super::build_chapter_ffmetadata(&chapters, 10.0);
+        assert!(text.contains("title=a\\=b\\;c\\#d\\\\e"));
     }
 }

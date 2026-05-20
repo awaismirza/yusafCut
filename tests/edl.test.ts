@@ -5,9 +5,14 @@ import {
   deleteWords,
   findWord,
   findWordAtSourceTime,
+  addChapter,
   newProject,
   nextSurvivingSegment,
   outputTimeToSource,
+  projectChapters,
+  removeChapter,
+  removeSilences,
+  renameChapter,
   sourceTimeToOutput,
   splitSegmentAtWord,
   totalDuration,
@@ -414,6 +419,146 @@ describe("EDL — pure functions", () => {
         .find((w) => w.id === "w-0")!;
       expect(aAfter.start).toBe(aOriginal.start);
       expect(aAfter.end).toBe(aOriginal.end);
+    });
+  });
+
+  describe("removeSilences", () => {
+    it("returns [project, 0] when there are no gaps", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia(),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 0.55, 1.0],
+          ["c", 1.05, 1.4],
+        ]),
+      );
+      const [next, removed] = removeSilences(p, { gapMs: 600 });
+      expect(removed).toBe(0);
+      expect(next).toBe(p);
+    });
+
+    it("splits a segment at gaps longer than the threshold", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 20 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 0.55, 1.0],
+          // 2s silence here
+          ["c", 3.0, 3.5],
+          ["d", 3.55, 4.0],
+        ]),
+      );
+      const [next, removed] = removeSilences(p, { gapMs: 600, paddingMs: 80 });
+      expect(removed).toBe(1);
+      expect(next.segments).toHaveLength(2);
+      expect(next.segments[0]!.words.map((w) => w.text)).toEqual(["a", "b"]);
+      expect(next.segments[1]!.words.map((w) => w.text)).toEqual(["c", "d"]);
+      // The first run keeps its leading original boundary, the second run
+      // starts no earlier than (c.start - padding).
+      expect(next.segments[0]!.sourceIn).toBe(0);
+      expect(next.segments[0]!.sourceOut).toBeCloseTo(1.08, 5);
+      expect(next.segments[1]!.sourceIn).toBeCloseTo(2.92, 5);
+      expect(next.segments[1]!.sourceOut).toBe(20);
+    });
+
+    it("removes multiple silences in a single segment", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 30 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 5, 5.5],
+          ["c", 10, 10.5],
+          ["d", 15, 15.5],
+        ]),
+      );
+      const [next, removed] = removeSilences(p, { gapMs: 600 });
+      expect(removed).toBe(3);
+      expect(next.segments).toHaveLength(4);
+    });
+
+    it("collapses output duration after silence removal", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 20 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 0.55, 1.0],
+          ["c", 10, 10.5],
+        ]),
+      );
+      const beforeDuration = totalDuration(p);
+      const [next, removed] = removeSilences(p, { gapMs: 600 });
+      expect(removed).toBe(1);
+      expect(totalDuration(next)).toBeLessThan(beforeDuration);
+    });
+
+    it("is idempotent once all gaps are gone", () => {
+      const p = addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 20 }),
+        makeWords([
+          ["a", 0, 0.5],
+          ["b", 5, 5.5],
+        ]),
+      );
+      const [trimmed, removed1] = removeSilences(p);
+      expect(removed1).toBe(1);
+      const [again, removed2] = removeSilences(trimmed);
+      expect(removed2).toBe(0);
+      expect(again).toBe(trimmed);
+    });
+  });
+
+  describe("chapters", () => {
+    const seed = () =>
+      addMediaWithTranscript(
+        newProject("t"),
+        makeMedia({ duration: 30 }),
+        makeWords([
+          ["a", 0, 1],
+          ["b", 1, 2],
+          ["c", 2, 3],
+        ]),
+      );
+
+    it("starts empty and reads defensively when missing", () => {
+      const p = seed();
+      expect(projectChapters(p)).toEqual([]);
+      // Simulate a v2.0 project loaded from disk without a chapters field.
+      const legacy: typeof p = { ...p };
+      delete (legacy as { chapters?: unknown }).chapters;
+      expect(projectChapters(legacy)).toEqual([]);
+    });
+
+    it("inserts chapters sorted by outputTime", () => {
+      let p = seed();
+      p = addChapter(p, 12, "Outro");
+      p = addChapter(p, 3, "Intro");
+      p = addChapter(p, 7, "Middle");
+      const titles = projectChapters(p).map((c) => c.title);
+      expect(titles).toEqual(["Intro", "Middle", "Outro"]);
+    });
+
+    it("clamps the chapter time into the project's output range", () => {
+      const p = addChapter(seed(), 9999, "Past end");
+      expect(projectChapters(p)[0]!.outputTime).toBe(totalDuration(seed()));
+    });
+
+    it("removeChapter is a no-op for unknown ids", () => {
+      const p = addChapter(seed(), 1, "x");
+      const before = p;
+      const after = removeChapter(p, "no-such-id");
+      expect(after).toBe(before);
+    });
+
+    it("renameChapter falls back to 'Chapter' for empty titles", () => {
+      let p = addChapter(seed(), 1, "first");
+      const id = projectChapters(p)[0]!.id;
+      p = renameChapter(p, id, "   ");
+      expect(projectChapters(p)[0]!.title).toBe("Chapter");
     });
   });
 });

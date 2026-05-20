@@ -50,6 +50,14 @@ export interface ProjectSettings {
   paddingMs: number; // default audio padding around cuts
 }
 
+/** A named jump-point on the OUTPUT timeline. Used for YouTube/podcast chapters. */
+export interface Chapter {
+  id: string;
+  /** Position in seconds on the *output* timeline (post-edits). */
+  outputTime: number;
+  title: string;
+}
+
 export interface Project {
   version: 1;
   id: string;
@@ -59,6 +67,8 @@ export interface Project {
   media: Record<MediaId, SourceMedia>;
   segments: Segment[];
   settings: ProjectSettings;
+  /** Optional — older v2.0 projects don't have this field. Empty by default. */
+  chapters?: Chapter[];
 }
 
 export interface TimelineEntry {
@@ -354,6 +364,83 @@ export function restoreWords(_project: Project, _wordIds: ReadonlySet<string>): 
   );
 }
 
+/**
+ * Remove long silences by splitting segments at every gap > `gapMs` between
+ * consecutive surviving words. Each resulting sub-segment keeps `paddingMs`
+ * of audio either side of the kept words so consonants don't get clipped.
+ *
+ * This is a pure EDL operation — no media is re-encoded; the player just
+ * skips the now-deleted ranges. Safe to call repeatedly; idempotent once
+ * every gap is already < gapMs.
+ *
+ * Returns a tuple of `[nextProject, removedCount]` so callers can show a
+ * "trimmed N silences" toast.
+ */
+export function removeSilences(
+  project: Project,
+  options: { gapMs?: number; paddingMs?: number } = {},
+): [Project, number] {
+  const gap = (options.gapMs ?? 600) / 1000;
+  const padding = (options.paddingMs ?? project.settings.paddingMs ?? DEFAULT_PADDING_MS) / 1000;
+
+  let removed = 0;
+  const nextSegments: Segment[] = [];
+
+  for (const seg of project.segments) {
+    if (seg.words.length < 2) {
+      nextSegments.push(seg);
+      continue;
+    }
+
+    // Find indices `i` where the gap between word[i] and word[i+1] is too big.
+    const gapBoundaries: number[] = [];
+    for (let i = 0; i < seg.words.length - 1; i++) {
+      const a = seg.words[i]!;
+      const b = seg.words[i + 1]!;
+      if (b.start - a.end > gap) gapBoundaries.push(i);
+    }
+
+    if (gapBoundaries.length === 0) {
+      nextSegments.push(seg);
+      continue;
+    }
+
+    removed += gapBoundaries.length;
+    // Slice the word list at each gap and emit one Segment per run.
+    let runStart = 0;
+    for (let k = 0; k <= gapBoundaries.length; k++) {
+      const runEnd = k < gapBoundaries.length ? gapBoundaries[k]! + 1 : seg.words.length;
+      const runWords = seg.words.slice(runStart, runEnd);
+      const firstWord = runWords[0]!;
+      const lastWord = runWords[runWords.length - 1]!;
+      const isFirstRun = k === 0;
+      const isLastRun = k === gapBoundaries.length;
+
+      const sourceIn = isFirstRun
+        ? seg.sourceIn
+        : Math.max(seg.sourceIn, firstWord.start - padding);
+      const sourceOut = isLastRun
+        ? seg.sourceOut
+        : Math.min(seg.sourceOut, lastWord.end + padding);
+
+      nextSegments.push({
+        id: uuidv4(),
+        mediaId: seg.mediaId,
+        words: runWords,
+        sourceIn,
+        sourceOut,
+      });
+      runStart = runEnd;
+    }
+  }
+
+  if (removed === 0) return [project, 0];
+  return [
+    { ...project, segments: nextSegments, updatedAt: new Date().toISOString() },
+    removed,
+  ];
+}
+
 /** Add a new source media + initial single-segment-covers-everything EDL. */
 export function addMediaWithTranscript(
   project: Project,
@@ -375,6 +462,42 @@ export function addMediaWithTranscript(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Chapters — pure helpers. All return a new Project; never mutate.
+// ---------------------------------------------------------------------------
+
+/** Read chapters defensively — handles older projects without the field. */
+export function projectChapters(project: Project): Chapter[] {
+  return project.chapters ?? [];
+}
+
+/** Add a chapter at the given output-time. Returns a new project; chapters are
+ * stored in ascending outputTime order so the timeline and exporter don't have
+ * to re-sort. Duplicate times are allowed (one wins; the user can rename). */
+export function addChapter(project: Project, outputTime: number, title = "Chapter"): Project {
+  const id = uuidv4();
+  const chapter: Chapter = {
+    id,
+    outputTime: Math.max(0, Math.min(outputTime, totalDuration(project))),
+    title: title.trim() || "Chapter",
+  };
+  const next = [...projectChapters(project), chapter].sort((a, b) => a.outputTime - b.outputTime);
+  return { ...project, chapters: next, updatedAt: new Date().toISOString() };
+}
+
+export function removeChapter(project: Project, id: string): Project {
+  const next = projectChapters(project).filter((c) => c.id !== id);
+  if (next.length === projectChapters(project).length) return project;
+  return { ...project, chapters: next, updatedAt: new Date().toISOString() };
+}
+
+export function renameChapter(project: Project, id: string, title: string): Project {
+  const next = projectChapters(project).map((c) =>
+    c.id === id ? { ...c, title: title.trim() || "Chapter" } : c,
+  );
+  return { ...project, chapters: next, updatedAt: new Date().toISOString() };
+}
+
 /** Create a brand new empty project. */
 export function newProject(name: string): Project {
   const now = new Date().toISOString();
@@ -390,5 +513,6 @@ export function newProject(name: string): Project {
       exportPreset: "youtube-1080p",
       paddingMs: DEFAULT_PADDING_MS,
     },
+    chapters: [],
   };
 }

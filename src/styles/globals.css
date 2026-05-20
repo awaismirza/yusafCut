@@ -706,18 +706,48 @@
   text-transform: none;
   letter-spacing: 0;
 }
-.timeline-rail {
+/* Scroll container — only scrolls horizontally when the rail is wider. */
+.timeline-scroll {
   position: relative;
   flex: 1;
   min-height: 0;
+  overflow-x: hidden; /* zoom = 1: rail width == container width */
+  overflow-y: hidden;
   cursor: pointer;
-  overflow: hidden;
+}
+.timeline-scroll.is-zoomed {
+  overflow-x: auto;
+}
+/* Slim scrollbar styling so the chrome doesn't dominate the timeline. */
+.timeline-scroll.is-zoomed::-webkit-scrollbar {
+  height: 8px;
+}
+.timeline-scroll.is-zoomed::-webkit-scrollbar-track {
+  background: hsl(var(--border) / 0.4);
+}
+.timeline-scroll.is-zoomed::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 4px;
+}
+.timeline-scroll.is-zoomed::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.7);
+}
+.timeline-rail {
+  position: relative;
+  height: 100%;
+  min-width: 100%;
+  cursor: pointer;
+  /* `width` is set inline; height covers the scroll container. */
 }
 .timeline-ticks {
   position: absolute;
-  inset: 0 0 auto 0;
+  top: 0;
+  left: 0;
+  /* `width` is inherited from the rail since this fills it. */
+  right: 0;
   height: 28px;
   border-bottom: 1px solid hsl(var(--border));
+  pointer-events: none;
 }
 .timeline-ticks span {
   position: absolute;
@@ -729,6 +759,7 @@
     "Cascadia Code",
     monospace;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .timeline-ticks span::before {
   content: "";
@@ -740,7 +771,10 @@
 }
 .timeline-bars {
   position: absolute;
-  inset: 35px 0 12px;
+  top: 35px;
+  bottom: 12px;
+  left: 0;
+  right: 0;
 }
 .timeline-bar {
   position: absolute;
@@ -835,4 +869,67 @@
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
   border-top: 10px solid hsl(var(--primary));
+}
+/* Chapter pin on the timeline — small flag with title tooltip. */
+.timeline-chapter {
+  position: absolute;
+  top: 28px;
+  bottom: 12px;
+  width: 0;
+  border-left: 2px solid hsl(40 85% 60%);
+  filter: drop-shadow(0 0 4px hsl(40 85% 60% / 0.35));
+  cursor: pointer;
+}
+.timeline-chapter span {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  padding: 1px 6px;
+  background: hsl(40 85% 60%);
+  color: hsl(30 20% 10%);
+  font:
+    600 10px/1.2 ui-sans-serif,
+    system-ui,
+    sans-serif;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.timeline-chapter:hover {
+  border-left-color: hsl(40 95% 70%);
+}
+.timeline-chapter:hover span {
+  background: hsl(40 95% 70%);
+}
+/* Minimap shown above the rail when zoomed in. Gives orientation while panning. */
+.timeline-minimap {
+  position: relative;
+  margin-left: auto;
+  background: hsl(var(--border) / 0.55);
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.timeline-minimap-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: hsl(var(--primary) / 0.18);
+  border-left: 1px solid hsl(var(--primary) / 0.7);
+  border-right: 1px solid hsl(var(--primary) / 0.7);
+  min-width: 4px;
+  pointer-events: none;
+}
+.timeline-minimap-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid hsl(var(--primary));
+  pointer-events: none;
 }

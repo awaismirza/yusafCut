@@ -24,6 +24,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { formatTimecode } from "@/lib/timecode";
+import { useVideoFrameClock } from "@/hooks/useVideoFrameClock";
 
 function firstMediaPath(project: Project): string | null {
   const ids = Object.keys(project.media);
@@ -235,18 +236,23 @@ export function VideoPreview() {
     [activeMediaId, outputDuration, project, setCurrentTime],
   );
 
-  const syncPlaybackClock = useCallback(() => {
+  // `precise` is the frame-accurate `mediaTime` from requestVideoFrameCallback
+  // when available; falling back to `el.currentTime` (which can lag a frame).
+  // Passing it explicitly removes one source of jitter in the word/timeline
+  // sync — the worst-case error is now sub-millisecond instead of ~16ms.
+  const syncPlaybackClock = useCallback((precise?: number) => {
     const el = videoRef.current;
     if (!el || scrubbing) return;
     const mediaId = activeMediaId ?? firstMediaId(project);
     if (!mediaId) return;
 
+    const srcTime = precise ?? el.currentTime;
+
     if (!hasTimeline(project)) {
-      setCurrentTime(el.currentTime);
+      setCurrentTime(srcTime);
       return;
     }
 
-    const srcTime = el.currentTime;
     const timeline = computeTimeline(project);
     const entry = timeline.find(
       (e) => e.mediaId === mediaId && srcTime >= e.sourceIn && srcTime < e.sourceOut,
@@ -338,7 +344,10 @@ export function VideoPreview() {
     if (!el) return;
 
     function onTimeUpdate() {
-      syncPlaybackClock();
+      // While paused, rVFC doesn't tick — we still need timeupdate to keep the
+      // store in sync with manual seeks. While playing, rVFC dominates and this
+      // is harmless redundancy.
+      syncPlaybackClock(el!.currentTime);
     }
 
     const onLoadedMetadata = () => {
@@ -382,18 +391,19 @@ export function VideoPreview() {
     };
   }, [setPlaying, syncPlaybackClock]);
 
-  useEffect(() => {
-    if (!playing) return;
-    let frame = 0;
-
-    const tick = () => {
-      syncPlaybackClock();
-      frame = window.requestAnimationFrame(tick);
-    };
-
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
-  }, [playing, syncPlaybackClock]);
+  // Frame-accurate clock — uses requestVideoFrameCallback (sub-ms precision,
+  // locked to video frame presentation) with rAF as a fallback. Replaces the
+  // earlier rAF tick that drifted on non-vsync refresh rates.
+  useVideoFrameClock(
+    videoRef,
+    useCallback(
+      (mediaTime: number) => {
+        syncPlaybackClock(mediaTime);
+      },
+      [syncPlaybackClock],
+    ),
+    playing,
+  );
 
   useEffect(() => {
     function onPlay() {
