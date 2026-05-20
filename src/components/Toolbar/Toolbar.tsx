@@ -121,6 +121,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const mediaLoading = useUIStore((s) => s.mediaLoading);
   const pushToast = useUIStore((s) => s.pushToast);
   const setMediaLoading = useUIStore((s) => s.setMediaLoading);
+  const setExportingProgress = useUIStore((s) => s.setExportingProgress);
+  const setTranscribeProgress = useUIStore((s) => s.setTranscribeProgress);
   const displayName = filePath?.split(/[\\/]/).pop() ?? `${project.name}.scribe`;
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
@@ -394,6 +396,10 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
     if (mediaIds.length === 0) return;
 
+    // Show the transcription progress dialog immediately — before the first
+    // Whisper event arrives so the user sees feedback right away.
+    setTranscribeProgress(0);
+
     try {
       // ── Step 1: download the model if it isn't on disk yet ──────────────
       const isInstalled = installedModels.find((m) => m.name === selectedModel)?.installed ?? false;
@@ -450,6 +456,10 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         description: String(err),
         variant: "destructive",
       });
+    } finally {
+      // Always hide the progress dialog — whether we succeeded, errored, or
+      // skipped transcription entirely (all clips already had words).
+      setTranscribeProgress(null);
     }
   }
 
@@ -496,6 +506,11 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                   width: Math.max(16, exportSettings.customWidth),
                   height: Math.max(16, exportSettings.customHeight),
                 };
+
+    // Show the export progress dialog immediately so the user sees feedback
+    // before the first ffmpeg progress event arrives.
+    setExportingProgress(0);
+
     try {
       await exportVideo({
         project,
@@ -514,8 +529,14 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         description: String(err),
         variant: "destructive",
       });
+    } finally {
+      // Always hide the progress dialog — covers both success and ffmpeg errors.
+      // On success, the Rust backend already emitted progress=1.0 which would
+      // also set this to null via useTranscribeProgress, but being explicit here
+      // ensures the dialog closes even if the event is lost.
+      setExportingProgress(null);
     }
-  }, [exportSettings, project, pushToast]);
+  }, [exportSettings, project, pushToast, setExportingProgress]);
 
   const handleExport = useCallback(() => {
     if (Object.keys(project.media).length === 0 || project.segments.length === 0) {
@@ -978,11 +999,29 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Progress indeterminate />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Whisper running locally</span>
-              <span>{(transcribeProgress ?? 0) > 0.05 ? "Decoding audio" : "Starting"}</span>
-            </div>
+            {/*
+             * Same two-phase pattern as export:
+             *  transcribeProgress === 0  → Whisper model is loading / audio is being decoded,
+             *                              no meaningful % yet — show indeterminate bar.
+             *  transcribeProgress  > 0  → Whisper is actively transcribing; show real %.
+             */}
+            {(transcribeProgress ?? 0) > 0 ? (
+              <>
+                <Progress value={(transcribeProgress ?? 0) * 100} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Whisper running locally</span>
+                  <span>{Math.round((transcribeProgress ?? 0) * 100)}%</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Progress indeterminate />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Whisper running locally</span>
+                  <span>Loading model…</span>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1020,11 +1059,31 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Progress value={(exportingProgress ?? 0) * 100} />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Writing .mp4</span>
-              <span>{Math.round((exportingProgress ?? 0) * 100)}%</span>
-            </div>
+            {/*
+             * Two-phase progress UI:
+             *  exportingProgress === 0  → ffmpeg is initialising (no frames encoded yet),
+             *                             show an indeterminate "running" bar with no %.
+             *  exportingProgress  > 0  → real frame data is flowing; switch to a
+             *                             determinate bar so the user can see how far along
+             *                             the render is.
+             */}
+            {(exportingProgress ?? 0) > 0 ? (
+              <>
+                <Progress value={(exportingProgress ?? 0) * 100} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Writing .mp4</span>
+                  <span>{Math.round((exportingProgress ?? 0) * 100)}%</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Progress indeterminate />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Preparing export…</span>
+                  <span>Starting ffmpeg</span>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
