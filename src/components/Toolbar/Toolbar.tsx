@@ -19,9 +19,11 @@ import {
   loadProject,
   onModelDownloadProgress,
   saveProject,
-  saveRecordingFile,
+  startNativeRecording,
+  stopNativeRecording,
   transcribe,
   type ModelInfo,
+  type RecordingMode,
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -97,8 +99,6 @@ function cacheProjectTranscripts(project: Project) {
   }
 }
 
-type RecordingMode = "voiceover" | "screen" | "camera";
-
 interface ToolbarProps {
   onFindClick?: () => void;
 }
@@ -107,27 +107,6 @@ function recordingLabel(mode: RecordingMode) {
   if (mode === "voiceover") return "Voice over";
   if (mode === "screen") return "Screen recording";
   return "Camera recording";
-}
-
-function recordingPrefix(mode: RecordingMode) {
-  if (mode === "voiceover") return "voiceover";
-  if (mode === "screen") return "screen-recording";
-  return "camera-recording";
-}
-
-function recordingMimeType(mode: RecordingMode) {
-  if (mode === "voiceover") {
-    return MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : "audio/webm";
-  }
-  if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
-    return "video/webm;codecs=vp9,opus";
-  }
-  if (MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
-    return "video/webm;codecs=vp8,opus";
-  }
-  return "video/webm";
 }
 
 export function Toolbar({ onFindClick }: ToolbarProps) {
@@ -165,9 +144,6 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const [recording, setRecording] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState("Ready to record locally");
   const unlistenDownloadRef = useRef<(() => void) | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recordingChunksRef = useRef<BlobPart[]>([]);
-  const recordingStreamRef = useRef<MediaStream | null>(null);
 
   async function handleOpen() {
     const path = await openDialog({
@@ -280,61 +256,11 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   }
 
   async function startRecording(mode: RecordingMode) {
-    if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
-      pushToast({
-        title: "Recording is not available",
-        description: "This WebView does not expose the browser recording APIs.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setRecordingMode(mode);
-    setRecordingStatus("Waiting for macOS permission…");
+    setRecordingStatus("Starting native macOS recorder…");
 
     try {
-      const stream =
-        mode === "voiceover"
-          ? await navigator.mediaDevices.getUserMedia({ audio: true })
-          : mode === "screen"
-            ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-            : await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-
-      recordingChunksRef.current = [];
-      recordingStreamRef.current = stream;
-      const mimeType = recordingMimeType(mode);
-      const recorder = new MediaRecorder(stream, { mimeType });
-      recorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordingChunksRef.current.push(event.data);
-      };
-      recorder.onstop = () => {
-        const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-        const label = recordingLabel(mode);
-        setRecordingStatus(`Saving ${label.toLowerCase()}…`);
-        void (async () => {
-          try {
-            const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
-            const path = await saveRecordingFile({
-              bytes,
-              extension: "webm",
-              prefix: recordingPrefix(mode),
-            });
-            setRecordingStatus("Transcribing recording…");
-            await importAndTranscribeRecording(path, label);
-            setRecordDialogOpen(false);
-          } finally {
-            recordingChunksRef.current = [];
-            recordingStreamRef.current = null;
-            recorderRef.current = null;
-            setRecording(false);
-            setRecordingStatus("Ready to record locally");
-          }
-        })();
-      };
-
-      recorder.start(1000);
+      await startNativeRecording(mode);
       setRecording(true);
       setRecordingStatus(`${recordingLabel(mode)} in progress`);
     } catch (err) {
@@ -348,13 +274,25 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     }
   }
 
-  function stopRecording() {
-    const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
-    }
-    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+  async function stopRecording() {
     setRecordingStatus("Stopping recording…");
+    try {
+      const label = recordingLabel(recordingMode);
+      const path = await stopNativeRecording();
+      setRecording(false);
+      setRecordingStatus("Transcribing recording…");
+      await importAndTranscribeRecording(path, label);
+      setRecordDialogOpen(false);
+    } catch (err) {
+      pushToast({
+        title: "Recording failed to stop",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setRecording(false);
+      setRecordingStatus("Ready to record locally");
+    }
   }
 
   async function refreshModelList() {
@@ -420,13 +358,6 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       setDownloadProgress(0);
     }
   }, [modelDialogOpen]);
-
-  useEffect(() => {
-    return () => {
-      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-    };
-  }, []);
 
   async function startTranscribe() {
     setModelDialogOpen(false);
@@ -732,7 +663,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               Cancel
             </Button>
             {recording ? (
-              <Button variant="destructive" className="gap-2" onClick={stopRecording}>
+              <Button variant="destructive" className="gap-2" onClick={() => void stopRecording()}>
                 <Square className="h-4 w-4" />
                 Stop recording
               </Button>

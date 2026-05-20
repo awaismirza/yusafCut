@@ -20,14 +20,14 @@ export function importMedia(path: string): Promise<SourceMedia> {
   return invoke<SourceMedia>("import_media", { path });
 }
 
-export interface SaveRecordingOptions {
-  bytes: number[];
-  extension: string;
-  prefix: string;
+export type RecordingMode = "voiceover" | "screen" | "camera";
+
+export function startNativeRecording(mode: RecordingMode): Promise<string> {
+  return invoke<string>("start_native_recording", { mode });
 }
 
-export function saveRecordingFile(opts: SaveRecordingOptions): Promise<string> {
-  return invoke<string>("save_recording_file", { opts });
+export function stopNativeRecording(): Promise<string> {
+  return invoke<string>("stop_native_recording");
 }
 
 // ---------------------------------------------------------------------------
