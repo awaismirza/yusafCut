@@ -177,31 +177,23 @@
   background: hsl(var(--destructive) / 0.11);
 }
 
-/* ════════════════════════════════════════════════════════════════════════
-   TIMELINE TOOLBOX
-   ════════════════════════════════════════════════════════════════════════ */
-.timeline-dock {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: stretch;
-}
 .editor-toolbox {
   position: relative;
   z-index: 2;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 5px;
-  width: 46px;
-  padding: 7px 5px;
-  border-right: 1px solid hsl(var(--border));
-  background: hsl(30 5% 8%);
-  box-shadow: 1px 0 0 hsl(0 0% 100% / 0.03) inset;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 8px;
+  border-inline: 1px solid hsl(var(--border) / 0.75);
+  background: hsl(30 5% 8% / 0.7);
 }
 .toolbox-button {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 26px;
   border-radius: 6px;
   color: hsl(var(--muted-foreground));
 }
@@ -227,10 +219,23 @@
 .toolbox-button.is-active span {
   color: hsl(var(--primary));
 }
+.toolbox-clear-button {
+  height: 26px;
+  gap: 5px;
+  border-radius: 6px;
+  padding: 0 7px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 700;
+}
+.toolbox-clear-button:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+}
 .toolbox-divider {
-  width: 22px;
-  height: 1px;
-  margin: 2px 0;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
   background: hsl(var(--border));
 }
 

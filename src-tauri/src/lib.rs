@@ -7,16 +7,18 @@
 pub mod commands;
 pub mod edl;
 pub mod export_state;
-pub mod media;
-pub mod project;
-pub mod transcribe;
 #[cfg(feature = "mlx-sidecar")]
 pub mod llm;
+pub mod media;
+pub mod project;
+pub mod recording_state;
+pub mod transcribe;
 
 /// Shared application state passed into every Tauri command.
 #[derive(Default)]
 pub struct AppState {
     pub export: export_state::ExportState,
+    pub recording: recording_state::RecordingState,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -30,6 +32,8 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::media::import_media,
+            commands::media::start_native_recording,
+            commands::media::stop_native_recording,
             commands::transcribe::transcribe,
             commands::transcribe::list_models,
             commands::transcribe::download_model,

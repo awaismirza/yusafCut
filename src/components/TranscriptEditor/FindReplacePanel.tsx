@@ -44,8 +44,6 @@ interface FindReplacePanelProps {
 export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
   const replaceText = useProjectStore((s) => s.replaceText);
   const deleteWordsByText = useProjectStore((s) => s.deleteWordsByText);
-  const paddingMs = useProjectStore((s) => s.project.settings.paddingMs);
-  const updatePaddingMs = useProjectStore((s) => s.updatePaddingMs);
   const pushToast = useUIStore((s) => s.pushToast);
 
   const [find, setFind] = useState("");
@@ -145,11 +143,7 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
     if (n === 0) {
       pushToast({ title: "No matches found" });
     } else {
-      pushToast({
-        title: `Removed ${n} ${n === 1 ? "word" : "words"}`,
-        description:
-          paddingMs > 0 ? `Kept ${(paddingMs / 1000).toFixed(1)}s around each cut` : undefined,
-      });
+      pushToast({ title: `Removed ${n} ${n === 1 ? "word" : "words"}` });
     }
   }
 
@@ -160,10 +154,7 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
     } else {
       pushToast({
         title: `Removed ${n} filler ${n === 1 ? "word" : "words"}`,
-        description:
-          paddingMs > 0
-            ? `Kept ${(paddingMs / 1000).toFixed(1)}s around each cut`
-            : "Press ⌘Z to undo",
+        description: "Press ⌘Z to undo",
       });
     }
     setShowFillerMenu(false);
@@ -348,22 +339,6 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
             onChange={(e) => setWholeWord(e.target.checked)}
           />
           W
-        </label>
-        <label
-          className="ml-auto flex min-w-[240px] items-center gap-2 text-xs text-muted-foreground"
-          title="Audio kept around deleted words"
-        >
-          Gap
-          <input
-            className="min-w-0 flex-1"
-            type="range"
-            min={0}
-            max={10_000}
-            step={250}
-            value={paddingMs}
-            onChange={(e) => updatePaddingMs(Number(e.target.value))}
-          />
-          <span className="w-12 text-right tabular-nums">{(paddingMs / 1000).toFixed(1)}s</span>
         </label>
       </div>
     </div>

@@ -84,13 +84,14 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
       </Button>
       <Button
         type="button"
-        size="icon"
+        size="sm"
         variant="ghost"
-        className="toolbox-button"
+        className="toolbox-clear-button"
         title="Clear markers (X)"
         onClick={clearMarkers}
       >
         <X className="h-4 w-4" />
+        Clear
       </Button>
       <span className="toolbox-divider" />
       <Button

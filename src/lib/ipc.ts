@@ -20,6 +20,16 @@ export function importMedia(path: string): Promise<SourceMedia> {
   return invoke<SourceMedia>("import_media", { path });
 }
 
+export type RecordingMode = "voiceover" | "screen" | "camera";
+
+export function startNativeRecording(mode: RecordingMode): Promise<string> {
+  return invoke<string>("start_native_recording", { mode });
+}
+
+export function stopNativeRecording(): Promise<string> {
+  return invoke<string>("stop_native_recording");
+}
+
 // ---------------------------------------------------------------------------
 // Transcription
 // ---------------------------------------------------------------------------
@@ -91,9 +101,7 @@ export interface ModelDownloadProgress {
 export function onModelDownloadProgress(
   handler: (p: ModelDownloadProgress) => void,
 ): Promise<UnlistenFn> {
-  return listen<ModelDownloadProgress>("model:download:progress", (e) =>
-    handler(e.payload),
-  );
+  return listen<ModelDownloadProgress>("model:download:progress", (e) => handler(e.payload));
 }
 
 // ---------------------------------------------------------------------------
@@ -143,9 +151,7 @@ export interface ExportProgress {
   etaSec: number | null;
 }
 
-export function onExportProgress(
-  handler: (p: ExportProgress) => void,
-): Promise<UnlistenFn> {
+export function onExportProgress(handler: (p: ExportProgress) => void): Promise<UnlistenFn> {
   return listen<ExportProgress>("export:progress", (e) => handler(e.payload));
 }
 

@@ -25,7 +25,7 @@ import Text from "@tiptap/extension-text";
 import { FILLER_WORDS, WordNode } from "./WordNode";
 import { useProjectStore, useTemporalProjectStore } from "@/stores/projectStore";
 import { usePlayerStore } from "@/stores/playerStore";
-import { computeTimeline, type Word } from "@/lib/edl";
+import { computeTimeline, wordIdToOutputTime, type Word } from "@/lib/edl";
 import { formatTimecode } from "@/lib/timecode";
 import { Button } from "@/components/ui/button";
 import { Eraser, RotateCcw, Search } from "lucide-react";
@@ -165,16 +165,22 @@ export function TranscriptEditor({
     },
   });
 
-  const handleTranscriptClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const selection = window.getSelection();
-    if (selection && !selection.isCollapsed) return;
-    const wordEl = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-word-id]");
-    if (!wordEl || !containerRef.current?.contains(wordEl)) return;
-    const start = Number(wordEl.dataset.start);
-    if (!Number.isFinite(start)) return;
-    window.dispatchEvent(new CustomEvent("scribe:seek-source", { detail: { start } }));
-    usePlayerStore.getState().setPlaying(true);
-  }, []);
+  const handleTranscriptClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) return;
+      const wordEl = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-word-id]");
+      if (!wordEl || !containerRef.current?.contains(wordEl)) return;
+      const wordId = wordEl.dataset.wordId;
+      if (!wordId) return;
+      const mapped = wordIdToOutputTime(project, wordId);
+      if (!mapped) return;
+      window.dispatchEvent(
+        new CustomEvent("scribe:seek-output", { detail: { time: mapped.outputTime, play: true } }),
+      );
+    },
+    [project],
+  );
 
   // Re-render the TipTap document whenever the EDL changes.
   useEffect(() => {
@@ -304,10 +310,16 @@ export function TranscriptEditor({
   }, [currentTime, project]);
 
   // Click on a paragraph timestamp → seek to start of that paragraph.
-  const seekToParagraph = useCallback((startTime: number) => {
-    window.dispatchEvent(new CustomEvent("scribe:seek-source", { detail: { start: startTime } }));
-    usePlayerStore.getState().setPlaying(true);
-  }, []);
+  const seekToParagraph = useCallback(
+    (wordId: string) => {
+      const mapped = wordIdToOutputTime(project, wordId);
+      if (!mapped) return;
+      window.dispatchEvent(
+        new CustomEvent("scribe:seek-output", { detail: { time: mapped.outputTime, play: true } }),
+      );
+    },
+    [project],
+  );
 
   // ── Empty / loading states ────────────────────────────────────────────────
 
@@ -383,7 +395,7 @@ export function TranscriptEditor({
                 <button
                   key={`${para.startTime}-${idx}`}
                   type="button"
-                  onClick={() => seekToParagraph(para.startTime)}
+                  onClick={() => seekToParagraph(para.words[0]!.id)}
                   className="paragraph-speaker-chip pointer-events-auto"
                   style={{ top }}
                   data-speaker={bucket}

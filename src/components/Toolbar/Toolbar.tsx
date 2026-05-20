@@ -19,8 +19,11 @@ import {
   loadProject,
   onModelDownloadProgress,
   saveProject,
+  startNativeRecording,
+  stopNativeRecording,
   transcribe,
   type ModelInfo,
+  type RecordingMode,
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -29,11 +32,15 @@ import {
   Download,
   FilePlus2,
   FolderOpen,
+  MonitorUp,
   MicVocal,
   Power,
+  Radio,
   Save,
   Scissors,
   Settings2,
+  Square,
+  Video,
 } from "lucide-react";
 import { formatDuration } from "@/lib/timecode";
 import {
@@ -41,12 +48,15 @@ import {
   newProject,
   totalDuration,
   type Project,
-  type SourceMedia,
   type Word,
 } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
-
-const TRANSCRIPT_CACHE_PREFIX = "scribe.transcript.v1.";
+import { Toolbox } from "@/components/Toolbox/Toolbox";
+import {
+  cacheProjectTranscripts,
+  readTranscriptCache,
+  writeTranscriptCache,
+} from "@/lib/transcriptCache";
 
 const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "tiny", label: "Tiny (fast, lower accuracy)", sizeMb: 75 },
@@ -56,42 +66,50 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "large-v3-turbo", label: "Large v3 Turbo (recommended)", sizeMb: 1600 },
 ];
 
-function transcriptCacheKey(media: SourceMedia): string {
-  return `${TRANSCRIPT_CACHE_PREFIX}${media.sha256}`;
+const MEDIA_EXTENSIONS = ["mp4", "mov", "m4v", "mkv", "webm", "m4a", "wav"];
+
+function mediaNameFromPath(path: string, fallback = "Untitled") {
+  return (
+    path
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.[^.]+$/, "") || fallback
+  );
 }
 
-function readTranscriptCache(media: SourceMedia): Word[] | null {
-  try {
-    const raw = localStorage.getItem(transcriptCacheKey(media));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { words?: Word[] };
-    return Array.isArray(parsed.words) ? parsed.words : null;
-  } catch {
-    return null;
-  }
+function wordsForMedia(project: Project, mediaId: string) {
+  return project.segments
+    .filter((segment) => segment.mediaId === mediaId)
+    .flatMap((segment) => segment.words);
 }
 
-function writeTranscriptCache(media: SourceMedia, words: Word[]) {
-  try {
-    localStorage.setItem(
-      transcriptCacheKey(media),
-      JSON.stringify({ mediaSha256: media.sha256, updatedAt: new Date().toISOString(), words }),
-    );
-  } catch {
-    // Cache failure should never block editing.
-  }
+function applyTranscriptToMedia(project: Project, mediaId: string, words: Word[]): Project {
+  return {
+    ...project,
+    segments: project.segments.map((segment) => {
+      if (segment.mediaId !== mediaId || segment.words.length > 0) return segment;
+      return {
+        ...segment,
+        words: words.filter(
+          (word) => word.end > segment.sourceIn && word.start < segment.sourceOut,
+        ),
+      };
+    }),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-function cacheProjectTranscripts(project: Project) {
-  for (const media of Object.values(project.media)) {
-    const words = project.segments
-      .filter((segment) => segment.mediaId === media.id)
-      .flatMap((segment) => segment.words);
-    if (words.length > 0) writeTranscriptCache(media, words);
-  }
+interface ToolbarProps {
+  onFindClick?: () => void;
 }
 
-export function Toolbar() {
+function recordingLabel(mode: RecordingMode) {
+  if (mode === "voiceover") return "Voice over";
+  if (mode === "screen") return "Screen recording";
+  return "Camera recording";
+}
+
+export function Toolbar({ onFindClick }: ToolbarProps) {
   const project = useProjectStore((s) => s.project);
   const dirty = useProjectStore((s) => s.dirty);
   const filePath = useProjectStore((s) => s.filePath);
@@ -121,22 +139,22 @@ export function Toolbar() {
   // Which model is currently being downloaded inside the dialog, and its progress.
   const [downloadingModel, setDownloadingModel] = useState<WhisperModel | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<RecordingMode>("voiceover");
+  const [recording, setRecording] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState("Ready to record locally");
   const unlistenDownloadRef = useRef<(() => void) | null>(null);
 
   async function handleOpen() {
     const path = await openDialog({
       multiple: false,
-      filters: [{ name: "Video", extensions: ["mp4", "mov", "m4v", "mkv"] }],
+      filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
     });
     if (typeof path !== "string") return;
     setMediaLoading(true);
     try {
       const media = await importMedia(path);
-      const name =
-        media.path
-          .split(/[\\/]/)
-          .pop()
-          ?.replace(/\.[^.]+$/, "") || "Untitled";
+      const name = mediaNameFromPath(media.path);
       const cachedWords = readTranscriptCache(media);
       const nextProject = buildProjectWithMedia(newProject(name), media, cachedWords ?? []);
       resetPlayer();
@@ -156,6 +174,44 @@ export function Toolbar() {
     }
   }
 
+  async function handleAddClip() {
+    const path = await openDialog({
+      multiple: false,
+      filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
+    });
+    if (typeof path !== "string") return;
+    await addClipToTimeline(path);
+  }
+
+  async function addClipToTimeline(path: string) {
+    setMediaLoading(true);
+    try {
+      const before = useProjectStore.getState().project;
+      const appendAt = totalDuration(before);
+      const media = await importMedia(path);
+      const cachedWords = readTranscriptCache(media) ?? [];
+      useProjectStore.getState().addMediaWithTranscript(media, cachedWords);
+      usePlayerStore.getState().clearTimelineRange();
+      usePlayerStore.getState().setSelectedWordIds(new Set());
+      window.dispatchEvent(new CustomEvent("scribe:seek-output", { detail: { time: appendAt } }));
+      pushToast({
+        title: cachedWords.length > 0 ? "Clip added with cached transcript" : "Clip added",
+        description:
+          cachedWords.length > 0
+            ? media.path
+            : "Click Transcribe to generate text for this clip.",
+      });
+    } catch (err) {
+      pushToast({
+        title: "Failed to add clip",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
   function resetPlayer() {
     usePlayerStore.getState().reset();
   }
@@ -164,6 +220,109 @@ export function Toolbar() {
     replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
     resetPlayer();
     pushToast({ title: "Project closed" });
+  }
+
+  async function ensureSelectedModelInstalled() {
+    const info = await listModels();
+    setInstalledModels(info);
+    const installed = info.find((m) => m.name === selectedModel)?.installed ?? false;
+    if (installed) return;
+
+    const modelLabel = MODELS.find((m) => m.name === selectedModel)?.label ?? selectedModel;
+    pushToast({
+      title: `Downloading ${modelLabel}…`,
+      description: "Needed once before local auto-transcription can run.",
+    });
+    await downloadModel(selectedModel);
+    setInstalledModels((prev) =>
+      prev.map((m) => (m.name === selectedModel ? { ...m, installed: true } : m)),
+    );
+  }
+
+  async function importAndTranscribeRecording(path: string, label: string) {
+    setMediaLoading(true);
+    try {
+      const media = await importMedia(path);
+      const name = mediaNameFromPath(media.path, label);
+      const projectWithMedia = buildProjectWithMedia(newProject(name), media, []);
+      resetPlayer();
+      replaceProjectBaseline(projectWithMedia, { dirty: true, filePath: null });
+      pushToast({ title: `${label} saved`, description: media.path });
+
+      await ensureSelectedModelInstalled();
+      const result = await transcribe({
+        mediaId: media.id,
+        mediaPath: media.path,
+        modelName: selectedModel,
+        mediaDuration: media.duration,
+      });
+      writeTranscriptCache(media, result.words);
+      replaceProjectBaseline(
+        {
+          ...projectWithMedia,
+          segments: [
+            {
+              id: crypto.randomUUID(),
+              mediaId: media.id,
+              words: result.words,
+              sourceIn: 0,
+              sourceOut: media.duration,
+            },
+          ],
+          updatedAt: new Date().toISOString(),
+        },
+        { dirty: true, filePath: null },
+      );
+      pushToast({ title: "Recording transcribed", description: `${result.words.length} words` });
+    } catch (err) {
+      pushToast({
+        title: "Recording import/transcription failed",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function startRecording(mode: RecordingMode) {
+    setRecordingMode(mode);
+    setRecordingStatus("Starting native macOS recorder…");
+
+    try {
+      await startNativeRecording(mode);
+      setRecording(true);
+      setRecordingStatus(`${recordingLabel(mode)} in progress`);
+    } catch (err) {
+      setRecording(false);
+      setRecordingStatus("Ready to record locally");
+      pushToast({
+        title: "Recording failed to start",
+        description: String(err),
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function stopRecording() {
+    setRecordingStatus("Stopping recording…");
+    try {
+      const label = recordingLabel(recordingMode);
+      const path = await stopNativeRecording();
+      setRecording(false);
+      setRecordingStatus("Transcribing recording…");
+      await importAndTranscribeRecording(path, label);
+      setRecordDialogOpen(false);
+    } catch (err) {
+      pushToast({
+        title: "Recording failed to stop",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setRecording(false);
+      setRecordingStatus("Ready to record locally");
+    }
   }
 
   async function refreshModelList() {
@@ -176,8 +335,8 @@ export function Toolbar() {
   }
 
   async function handleTranscribe() {
-    const ids = Object.keys(project.media);
-    if (ids.length === 0) {
+    const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
+    if (mediaIds.length === 0) {
       pushToast({ title: "Open a video first", variant: "destructive" });
       return;
     }
@@ -232,8 +391,8 @@ export function Toolbar() {
 
   async function startTranscribe() {
     setModelDialogOpen(false);
-    const ids = Object.keys(project.media);
-    if (ids.length === 0) return;
+    const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
+    if (mediaIds.length === 0) return;
 
     try {
       // ── Step 1: download the model if it isn't on disk yet ──────────────
@@ -249,33 +408,41 @@ export function Toolbar() {
       }
 
       // ── Step 2: transcribe ───────────────────────────────────────────────
-      const media = project.media[ids[0]!]!;
-      const result = await transcribe({
-        mediaId: ids[0]!,
-        mediaPath: media.path,
-        modelName: selectedModel,
-        mediaDuration: media.duration,
-      });
-      writeTranscriptCache(media, result.words);
+      let nextProject = useProjectStore.getState().project;
+      let totalWords = 0;
+      let transcribedClips = 0;
+      for (const mediaId of mediaIds) {
+        const media = nextProject.media[mediaId];
+        if (!media) continue;
+        const cached = readTranscriptCache(media);
+        const existingWords = wordsForMedia(nextProject, mediaId);
+        if (existingWords.length > 0) {
+          totalWords += existingWords.length;
+          continue;
+        }
+        const words =
+          cached ??
+          (
+            await transcribe({
+              mediaId,
+              mediaPath: media.path,
+              modelName: selectedModel,
+              mediaDuration: media.duration,
+            })
+          ).words;
+        if (!cached) writeTranscriptCache(media, words);
+        nextProject = applyTranscriptToMedia(nextProject, mediaId, words);
+        totalWords += words.length;
+        transcribedClips++;
+      }
 
-      // Replace the empty initial transcript with the real words.
-      const next = {
-        ...project,
-        segments: [
-          {
-            id: crypto.randomUUID(),
-            mediaId: media.id,
-            words: result.words,
-            sourceIn: 0,
-            sourceOut: media.duration,
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      };
-      replaceProjectBaseline(next, { dirty: true, filePath });
+      replaceProjectBaseline(nextProject, { dirty: true, filePath });
       pushToast({
         title: "Transcription complete",
-        description: `${result.words.length} words`,
+        description:
+          transcribedClips > 0
+            ? `${totalWords} words across ${mediaIds.length} clip${mediaIds.length === 1 ? "" : "s"}`
+            : "All clips already had transcript text",
       });
     } catch (err) {
       pushToast({
@@ -398,6 +565,9 @@ export function Toolbar() {
           <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
             <FolderOpen className="h-4 w-4" /> Open Media
           </Button>
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
+            <Scissors className="h-4 w-4" /> Add Clip
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -441,7 +611,17 @@ export function Toolbar() {
           </Button>
         </div>
 
+        <Toolbox onFindClick={onFindClick} />
+
         <div className="tool-group">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            onClick={() => setRecordDialogOpen(true)}
+          >
+            <Radio className="h-4 w-4" /> Record
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -460,6 +640,83 @@ export function Toolbar() {
           </Button>
         </div>
       </div>
+
+      <Dialog
+        open={recordDialogOpen}
+        onOpenChange={(open) => {
+          if (!recording) setRecordDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Radio className="h-4 w-4 text-primary" />
+              Record locally
+            </DialogTitle>
+            <DialogDescription>
+              Capture voice, screen, or camera media on this Mac. Scribe saves the clip locally,
+              imports it, and transcribes it with Whisper.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={recordingMode === "voiceover" ? "default" : "outline"}
+                className="h-auto flex-col gap-2 py-4"
+                disabled={recording}
+                onClick={() => setRecordingMode("voiceover")}
+              >
+                <MicVocal className="h-5 w-5" />
+                Voice over
+              </Button>
+              <Button
+                variant={recordingMode === "screen" ? "default" : "outline"}
+                className="h-auto flex-col gap-2 py-4"
+                disabled={recording}
+                onClick={() => setRecordingMode("screen")}
+              >
+                <MonitorUp className="h-5 w-5" />
+                Screen
+              </Button>
+              <Button
+                variant={recordingMode === "camera" ? "default" : "outline"}
+                className="h-auto flex-col gap-2 py-4"
+                disabled={recording}
+                onClick={() => setRecordingMode("camera")}
+              >
+                <Video className="h-5 w-5" />
+                Camera
+              </Button>
+            </div>
+
+            <div className="rounded-md border border-border bg-secondary/45 px-3 py-2 text-sm text-muted-foreground">
+              {recordingStatus}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRecordDialogOpen(false)}
+              disabled={recording}
+            >
+              Cancel
+            </Button>
+            {recording ? (
+              <Button variant="destructive" className="gap-2" onClick={() => void stopRecording()}>
+                <Square className="h-4 w-4" />
+                Stop recording
+              </Button>
+            ) : (
+              <Button className="gap-2" onClick={() => void startRecording(recordingMode)}>
+                <Radio className="h-4 w-4" />
+                Start {recordingLabel(recordingMode)}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
         <DialogContent className="max-w-md">

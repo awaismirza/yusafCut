@@ -120,7 +120,9 @@ export function Waveform() {
     if (!mapped) return;
     setCurrentTime(outputTime);
     window.dispatchEvent(
-      new CustomEvent("scribe:seek-source", { detail: { start: mapped.sourceTime } }),
+      new CustomEvent("scribe:seek-source", {
+        detail: { start: mapped.sourceTime, mediaId: mapped.segment.mediaId },
+      }),
     );
     usePlayerStore.getState().setPlaying(true);
   }

@@ -31,11 +31,19 @@ function firstMediaPath(project: Project): string | null {
   return project.media[ids[0]!]!.path;
 }
 
+function firstMediaId(project: Project): string | null {
+  return Object.keys(project.media)[0] ?? null;
+}
+
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 /** True when the project has at least one segment with transcribed words. */
 function hasWords(project: Project) {
   return project.segments.some((s) => s.words.length > 0);
+}
+
+function hasTimeline(project: Project) {
+  return project.segments.length > 0;
 }
 
 function displayDurationForProgress(outputDuration: number, nativeDuration: number) {
@@ -75,8 +83,13 @@ export function VideoPreview() {
   const [nativeDuration, setNativeDuration] = useState(0);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [loadMessage, setLoadMessage] = useState<string>("");
+  const [activeMediaId, setActiveMediaId] = useState<string | null>(() => firstMediaId(project));
+  const pendingSeekRef = useRef<{ sourceTime: number; outputTime: number; play: boolean } | null>(
+    null,
+  );
 
-  const mediaPath = firstMediaPath(project);
+  const fallbackMediaPath = firstMediaPath(project);
+  const mediaPath = activeMediaId ? (project.media[activeMediaId]?.path ?? null) : fallbackMediaPath;
   const src = mediaPath ? convertFileSrc(mediaPath) : null;
   const outputDuration = totalDuration(project);
   const hasTranscriptWords = hasWords(project);
@@ -95,24 +108,6 @@ export function VideoPreview() {
   // the play/pause effect. Without this guard, an AbortError from the first
   // play() flips `playing` back to false and pauses the video immediately.
   const playIntentRef = useRef(false);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    playIntentRef.current = false;
-    setCurrentTime(0);
-    setPlaying(false);
-    setNativeDuration(0);
-    setLoadState(src ? "loading" : "idle");
-    setLoadMessage(src ? "Loading media..." : "");
-    el.pause();
-    try {
-      el.currentTime = 0;
-    } catch {
-      /* ignored until metadata exists */
-    }
-    el.load();
-  }, [src, setCurrentTime, setPlaying]);
 
   const playVideo = useCallback(() => {
     const el = videoRef.current;
@@ -140,6 +135,49 @@ export function VideoPreview() {
     return true;
   }, [setPlaying, src]);
 
+  useEffect(() => {
+    const desiredMediaId = outputTimeToSource(project, currentTime)?.segment.mediaId ?? firstMediaId(project);
+    if (desiredMediaId && !project.media[activeMediaId ?? ""]) {
+      setActiveMediaId(desiredMediaId);
+    }
+  }, [activeMediaId, currentTime, project]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const pending = pendingSeekRef.current;
+    playIntentRef.current = pending?.play ?? false;
+    if (!pending) {
+      setCurrentTime(0);
+      setPlaying(false);
+    } else {
+      setCurrentTime(pending.outputTime);
+      setPlaying(pending.play);
+    }
+    setNativeDuration(0);
+    setLoadState(src ? "loading" : "idle");
+    setLoadMessage(src ? "Loading media..." : "");
+    el.pause();
+    try {
+      el.currentTime = pending?.sourceTime ?? 0;
+    } catch {
+      /* ignored until metadata exists */
+    }
+
+    const applyPendingSeek = () => {
+      const seek = pendingSeekRef.current;
+      if (!seek) return;
+      el.currentTime = seek.sourceTime;
+      setCurrentTime(seek.outputTime);
+      pendingSeekRef.current = null;
+      if (seek.play) playVideo();
+    };
+
+    el.addEventListener("loadedmetadata", applyPendingSeek, { once: true });
+    el.load();
+    return () => el.removeEventListener("loadedmetadata", applyPendingSeek);
+  }, [playVideo, setCurrentTime, setPlaying, src]);
+
   const pauseVideo = useCallback(() => {
     const el = videoRef.current;
     playIntentRef.current = false;
@@ -147,18 +185,67 @@ export function VideoPreview() {
     setPlaying(false);
   }, [setPlaying]);
 
+  // ── Output-time seek helpers ──────────────────────────────────────────────
+  const seekToOutputTime = useCallback(
+    (targetOutput: number, opts: { play?: boolean } = {}) => {
+      const el = videoRef.current;
+      if (!el) return;
+      const clamped = Math.max(0, Math.min(targetOutput, outputDuration || el.duration || 0));
+
+      // Free-play mode: output time === source time before an EDL exists.
+      if (!hasTimeline(project)) {
+        el.currentTime = clamped;
+        setCurrentTime(clamped);
+        return;
+      }
+
+      const mapped = outputTimeToSource(project, clamped);
+      if (mapped) {
+        const mediaId = mapped.segment.mediaId;
+        if (mediaId !== activeMediaId) {
+          pendingSeekRef.current = {
+            sourceTime: mapped.sourceTime,
+            outputTime: clamped,
+            play: opts.play ?? usePlayerStore.getState().playing,
+          };
+          setActiveMediaId(mediaId);
+          return;
+        }
+        el.currentTime = mapped.sourceTime;
+        setCurrentTime(clamped);
+        return;
+      }
+
+      const timeline = computeTimeline(project);
+      if (timeline.length > 0) {
+        const last = timeline[timeline.length - 1]!;
+        if (last.mediaId !== activeMediaId) {
+          pendingSeekRef.current = {
+            sourceTime: last.sourceOut,
+            outputTime: outputDuration,
+            play: false,
+          };
+          setActiveMediaId(last.mediaId);
+          return;
+        }
+        el.currentTime = last.sourceOut;
+        setCurrentTime(outputDuration);
+      }
+    },
+    [activeMediaId, outputDuration, project, setCurrentTime],
+  );
+
   const syncPlaybackClock = useCallback(() => {
     const el = videoRef.current;
     if (!el || scrubbing) return;
-    const ids = Object.keys(project.media);
-    if (ids.length === 0) return;
+    const mediaId = activeMediaId ?? firstMediaId(project);
+    if (!mediaId) return;
 
-    if (!hasWords(project)) {
+    if (!hasTimeline(project)) {
       setCurrentTime(el.currentTime);
       return;
     }
 
-    const mediaId = ids[0]!;
     const srcTime = el.currentTime;
     const timeline = computeTimeline(project);
     const entry = timeline.find(
@@ -170,15 +257,24 @@ export function VideoPreview() {
       return;
     }
 
+    const outputNow = usePlayerStore.getState().currentTime;
+    const nextTimelineEntry = timeline.find((e) => e.outputStart >= outputNow - 0.05);
+    if (nextTimelineEntry) {
+      seekToOutputTime(nextTimelineEntry.outputStart + 0.001);
+      return;
+    }
+
     const next = nextSurvivingSegment(project, mediaId, srcTime);
-    if (next) {
+    if (next && next.mediaId === mediaId) {
+      const mapped = sourceTimeToOutput(project, mediaId, next.sourceIn);
+      if (mapped) setCurrentTime(mapped.outputTime);
       el.currentTime = next.sourceIn;
       return;
     }
 
     el.pause();
     setPlaying(false);
-  }, [project, scrubbing, setCurrentTime, setPlaying]);
+  }, [activeMediaId, project, scrubbing, seekToOutputTime, setCurrentTime, setPlaying]);
 
   // ── Drive play/pause state from store ────────────────────────────────────
   useEffect(() => {
@@ -208,22 +304,33 @@ export function VideoPreview() {
   // both this handler and the effect called play() in quick succession.
   useEffect(() => {
     const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ start: number }>;
+      const ce = e as CustomEvent<{ start: number; mediaId?: string }>;
       const el = videoRef.current;
       if (!el) return;
-      el.currentTime = ce.detail.start;
-      const firstMediaId = Object.keys(project.media)[0];
-      if (firstMediaId && hasWords(project)) {
-        const mapped = sourceTimeToOutput(project, firstMediaId, ce.detail.start);
-        setCurrentTime(mapped?.outputTime ?? 0);
-      } else {
-        setCurrentTime(ce.detail.start);
+      const mediaId = ce.detail.mediaId ?? activeMediaId ?? firstMediaId(project);
+      if (mediaId && hasTimeline(project)) {
+        const mapped = sourceTimeToOutput(project, mediaId, ce.detail.start);
+        if (mapped) {
+          seekToOutputTime(mapped.outputTime, { play: true });
+          return;
+        }
       }
-      playVideo();
+      if (mediaId && mediaId !== activeMediaId) {
+        pendingSeekRef.current = {
+          sourceTime: ce.detail.start,
+          outputTime: ce.detail.start,
+          play: true,
+        };
+        setActiveMediaId(mediaId);
+      } else {
+        el.currentTime = ce.detail.start;
+        setCurrentTime(ce.detail.start);
+        playVideo();
+      }
     };
     window.addEventListener("scribe:seek-source", handler);
     return () => window.removeEventListener("scribe:seek-source", handler);
-  }, [playVideo, project, setCurrentTime]);
+  }, [activeMediaId, playVideo, project, seekToOutputTime, setCurrentTime]);
 
   // ── Time update: skip deleted ranges, update store ────────────────────────
   useEffect(() => {
@@ -288,36 +395,6 @@ export function VideoPreview() {
     return () => window.cancelAnimationFrame(frame);
   }, [playing, syncPlaybackClock]);
 
-  // ── Output-time seek helpers ──────────────────────────────────────────────
-  const seekToOutputTime = useCallback(
-    (targetOutput: number) => {
-      const el = videoRef.current;
-      if (!el) return;
-      const clamped = Math.max(0, Math.min(targetOutput, outputDuration || el.duration || 0));
-
-      // Free-play mode: output time === source time.
-      if (!hasWords(project)) {
-        el.currentTime = clamped;
-        setCurrentTime(clamped);
-        return;
-      }
-
-      const mapped = outputTimeToSource(project, clamped);
-      if (mapped) {
-        el.currentTime = mapped.sourceTime;
-        setCurrentTime(clamped);
-        return;
-      }
-      const timeline = computeTimeline(project);
-      if (timeline.length > 0) {
-        const last = timeline[timeline.length - 1]!;
-        el.currentTime = last.sourceOut;
-        setCurrentTime(outputDuration);
-      }
-    },
-    [project, outputDuration, setCurrentTime],
-  );
-
   useEffect(() => {
     function onPlay() {
       playVideo();
@@ -331,8 +408,10 @@ export function VideoPreview() {
     }
     function onSeekOutput(e: Event) {
       const ce = e as CustomEvent<{ time: number; play?: boolean }>;
-      seekToOutputTime(ce.detail.time);
-      if (ce.detail.play) playVideo();
+      seekToOutputTime(ce.detail.time, { play: ce.detail.play });
+      if (ce.detail.play && activeMediaId === outputTimeToSource(project, ce.detail.time)?.segment.mediaId) {
+        playVideo();
+      }
     }
 
     window.addEventListener("scribe:play", onPlay);
@@ -345,7 +424,7 @@ export function VideoPreview() {
       window.removeEventListener("scribe:toggle-play", onToggle);
       window.removeEventListener("scribe:seek-output", onSeekOutput);
     };
-  }, [pauseVideo, playVideo, seekToOutputTime]);
+  }, [activeMediaId, pauseVideo, playVideo, project, seekToOutputTime]);
 
   const seekToSelectedWord = useCallback(() => {
     const el = videoRef.current;
@@ -357,10 +436,9 @@ export function VideoPreview() {
       if (!best || mapped.outputTime < best.outputTime) best = mapped;
     }
     if (!best) return false;
-    el.currentTime = best.sourceTime;
-    setCurrentTime(best.outputTime);
+    seekToOutputTime(best.outputTime);
     return true;
-  }, [project, selectedWordIds, setCurrentTime]);
+  }, [project, seekToOutputTime, selectedWordIds]);
 
   const handleScrubStart = () => {
     setScrubbing(true);
@@ -375,8 +453,8 @@ export function VideoPreview() {
     e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>,
   ) => {
     const fraction = Number((e.currentTarget as HTMLInputElement).value) / 1000;
-    // Use source duration when there are no EDL words yet
-    const dur = hasWords(project) ? outputDuration : (videoRef.current?.duration ?? 0);
+    // Use source duration only before the EDL has any segment.
+    const dur = hasTimeline(project) ? outputDuration : (videoRef.current?.duration ?? 0);
     seekToOutputTime(fraction * dur);
     setScrubbing(false);
   };
