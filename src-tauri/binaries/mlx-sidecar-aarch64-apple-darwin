@@ -1,0 +1,33 @@
+#!/bin/sh
+# Dev launcher for the MLX-LLM Python sidecar.
+#
+# In development (tauri dev), Tauri runs this script directly.
+# For a production build, replace this file with the PyInstaller binary:
+#   python sidecars/mlx-llm/build.py
+#
+# Setup (once):
+#   npm run sidecar:setup
+
+# Resolve the repo root — this script lives at src-tauri/binaries/
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SIDECAR_DIR="$REPO_ROOT/sidecars/mlx-llm"
+VENV_PYTHON="$SIDECAR_DIR/.venv/bin/python"
+
+# Prefer the venv Python, fall back to system Python3.
+if [ -x "$VENV_PYTHON" ]; then
+    PYTHON="$VENV_PYTHON"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+else
+    echo '{"id":"boot","ok":false,"error":"Python 3 not found. Run: npm run sidecar:setup"}' >&2
+    exit 1
+fi
+
+# Check that the package is importable (i.e. dependencies are installed).
+if ! "$PYTHON" -c "import mlx_llm" 2>/dev/null; then
+    echo '{"id":"boot","ok":false,"error":"mlx_llm not importable. Run: npm run sidecar:setup"}' >&2
+    exit 1
+fi
+
+exec "$PYTHON" -m mlx_llm

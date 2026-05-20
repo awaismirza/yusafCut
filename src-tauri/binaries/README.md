@@ -5,9 +5,11 @@ This directory ships native binaries alongside the Tauri app. Tauri's
 filename to end with the target triple suffix. For Apple Silicon, that's:
 
 ```
-whisper-cli-aarch64-apple-darwin
-ffmpeg-aarch64-apple-darwin
-ffprobe-aarch64-apple-darwin
+whisper-cli-aarch64-apple-darwin        # whisper.cpp transcription engine
+ffmpeg-aarch64-apple-darwin             # video encode / export
+ffprobe-aarch64-apple-darwin            # media probing
+mlx-sidecar-aarch64-apple-darwin        # on-device LLM via Apple MLX (PyInstaller bundle)
+whisperkit-cli-aarch64-apple-darwin     # WhisperKit transcription (Tier 2, stub for now)
 ```
 
 (With an additional `-x86_64-apple-darwin` set if you ever ship Intel/universal
@@ -19,7 +21,9 @@ binaries.)
 "externalBin": [
   "binaries/whisper-cli",
   "binaries/ffmpeg",
-  "binaries/ffprobe"
+  "binaries/ffprobe",
+  "binaries/mlx-sidecar",
+  "binaries/whisperkit-cli"
 ]
 ```
 
@@ -73,10 +77,23 @@ chmod +x ../scribe/src-tauri/binaries/whisper-cli-aarch64-apple-darwin
 
 Note that the binary is called `main` in the upstream Makefile; we rename it.
 
-### 3. (Optional) `mlx-sidecar` for Phase 6.3 LLM features
+### 3. `mlx-sidecar` (on-device LLM via Apple MLX)
 
-Build with PyInstaller from `sidecars/mlx-llm/` (see that directory's README).
-Add to `externalBin` once you wire it up.
+Build with PyInstaller from the sidecar source:
+
+```bash
+# Activate a venv with mlx-lm and PyInstaller installed first.
+python sidecars/mlx-llm/build.py
+# Writes: src-tauri/binaries/mlx-sidecar-aarch64-apple-darwin
+```
+
+A dev stub (`#!/bin/sh … exit 1`) is committed so `cargo build` doesn't fail
+for developers who haven't run the PyInstaller step yet.
+
+### 4. `whisperkit-cli` (WhisperKit — Tier 2 roadmap)
+
+Not yet implemented. A dev stub is committed so `cargo build` doesn't fail.
+Replace with the real WhisperKit CLI binary when that feature lands.
 
 ---
 

@@ -34,19 +34,54 @@ export function stopNativeRecording(): Promise<string> {
 // Transcription
 // ---------------------------------------------------------------------------
 
+/** Which inference backend to use. Mirrors Rust's TranscriptionEngine. */
+export type TranscriptionEngine = "whisper-cpp" | "whisper-kit";
+
+/** whisper.cpp GGML model names (kebab-case, matches Rust WhisperModel). */
+export type WhisperModel = "tiny" | "base" | "small" | "medium" | "large-v3-turbo";
+
+/** WhisperKit Core ML model repo names (matches Rust WhisperKitModel). */
+export type WhisperKitModel =
+  | "openai_whisper-tiny"
+  | "openai_whisper-base"
+  | "openai_whisper-small"
+  | "openai_whisper-large-v3-turbo"
+  | "openai_whisper-large-v3";
+
 export interface TranscribeOptions {
   mediaId: string;
   mediaPath: string;
-  modelName: WhisperModel;
+  /**
+   * Which engine to use. Defaults to "whisper-cpp".
+   * Pass a WhisperKitModel string when engine is "whisper-kit".
+   */
+  engine?: TranscriptionEngine;
+  modelName: WhisperModel | WhisperKitModel;
   /** Total media duration in seconds — used to compute 0..1 progress. */
   mediaDuration?: number;
+  /**
+   * BCP-47 language code for the source audio (e.g. "fr", "es", "de").
+   * Omit or pass "auto" to let Whisper detect the language.
+   */
+  language?: string;
+  /**
+   * When true, Whisper outputs English regardless of the source language.
+   * Only meaningful for whisper-cpp; ignored by WhisperKit.
+   */
+  translate?: boolean;
+  /**
+   * When true, whisper-cli attempts to identify speakers via --diarize.
+   * Requires whisper.cpp built with diarisation support.
+   * Only meaningful for whisper-cpp.
+   */
+  diarize?: boolean;
 }
-
-export type WhisperModel = "tiny" | "base" | "small" | "medium" | "large-v3-turbo";
 
 export interface TranscribeResult {
   mediaId: string;
   words: Word[];
+  /** Which engine produced this result. */
+  engine: TranscriptionEngine;
 }
 
 /** Kick off a transcription. Resolves when complete; subscribe to progress events
@@ -75,7 +110,10 @@ export function onTranscribeProgress(
 // ---------------------------------------------------------------------------
 
 export interface ModelInfo {
-  name: WhisperModel;
+  /** Which engine this model belongs to. */
+  engine: TranscriptionEngine;
+  /** Model identifier — WhisperModel slug or WhisperKitModel repo name. */
+  name: string;
   /** Approximate disk size in MB. */
   sizeMb: number;
   /** Whether the model is already downloaded. */
@@ -86,12 +124,16 @@ export function listModels(): Promise<ModelInfo[]> {
   return invoke<ModelInfo[]>("list_models");
 }
 
-export function downloadModel(name: WhisperModel): Promise<void> {
-  return invoke<void>("download_model", { name });
+/**
+ * Download a model. Pass the model's `name` and `engine` as returned by
+ * `listModels` — the backend uses the engine to pick the right download path.
+ */
+export function downloadModel(engine: TranscriptionEngine, name: string): Promise<void> {
+  return invoke<void>("download_model", { engine, name });
 }
 
 export interface ModelDownloadProgress {
-  name: WhisperModel;
+  name: string;
   /** 0..1 */
   progress: number;
   bytesDownloaded: number;
@@ -177,10 +219,85 @@ export function revealInFinder(path: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// AI / LLM (on-device MLX sidecar)
+// ---------------------------------------------------------------------------
+
+/** A single chapter marker returned by the on-device LLM. */
+export interface ChapterMarker {
+  title: string;
+  /** Start time in seconds from the beginning of the recording. */
+  startSeconds: number;
+}
+
+export interface DetectChaptersOptions {
+  /** Used only to label the background Job entry in the flyout. */
+  mediaId: string;
+  /** Plain text transcript, optionally with `[SS.s]` word timestamps. */
+  transcript: string;
+  /** How many chapters to request (default 10). */
+  nChapters?: number;
+  /** Override the MLX model slug (default Llama-3.2-3B-Instruct-4bit). */
+  model?: string;
+}
+
+/**
+ * Run on-device chapter detection via the MLX-LLM sidecar.
+ *
+ * The call is tracked as a background Job so progress shows up in the Jobs
+ * flyout. Resolves with an ordered list of chapter markers.
+ */
+export function detectChapters(
+  opts: DetectChaptersOptions,
+): Promise<ChapterMarker[]> {
+  return invoke<ChapterMarker[]>("detect_chapters", { opts });
+}
+
+/** A single b-roll suggestion returned by the on-device LLM. */
+export interface BrollSuggestion {
+  /** Stock footage / Unsplash search query, 4–8 words. */
+  query: string;
+  /** Output-timeline start of the span this covers, in seconds. */
+  startSeconds: number;
+  /** Output-timeline end of the span this covers, in seconds. */
+  endSeconds: number;
+  /** One sentence explaining why this shot suits the content. */
+  rationale: string;
+}
+
+export interface SuggestBrollOptions {
+  /** Used to label the background Job entry. */
+  mediaId: string;
+  /** Transcript text for the span (with optional `[SS.s]` timestamps). */
+  transcript: string;
+  /** Output-timeline start of the span, in seconds. */
+  startSeconds: number;
+  /** Output-timeline end of the span, in seconds. */
+  endSeconds: number;
+  /** How many suggestions to request (default 3). */
+  nSuggestions?: number;
+  /** Override the MLX model slug. */
+  model?: string;
+}
+
+/**
+ * Ask the on-device LLM for b-roll search queries for a span of the timeline.
+ * Tracked as a background Job. Resolves with an ordered list of suggestions.
+ */
+export function suggestBroll(opts: SuggestBrollOptions): Promise<BrollSuggestion[]> {
+  return invoke<BrollSuggestion[]>("suggest_broll", { opts });
+}
+
+// ---------------------------------------------------------------------------
 // Jobs (background queue)
 // ---------------------------------------------------------------------------
 
-export type JobKind = "export" | "transcribe" | "download-model" | "snapshot";
+export type JobKind =
+  | "export"
+  | "transcribe"
+  | "download-model"
+  | "snapshot"
+  | "detect-chapters"
+  | "suggest-broll";
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export interface JobSnapshot {

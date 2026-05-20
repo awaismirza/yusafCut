@@ -1,0 +1,5 @@
+#!/bin/sh
+# DEV STUB — WhisperKit CLI is not yet implemented (Tier 2 roadmap).
+# Replace with the real WhisperKit binary when that feature lands.
+echo "whisperkit-cli: not yet implemented" >&2
+exit 1

@@ -24,6 +24,8 @@ import {
   transcribe,
   type ModelInfo,
   type RecordingMode,
+  type TranscriptionEngine,
+  type WhisperKitModel,
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -61,6 +63,7 @@ import { MusicTracksDialog } from "@/components/Toolbox/MusicTracksDialog";
 import { SnapshotsDialog } from "@/components/Toolbox/SnapshotsDialog";
 import {
   cacheProjectTranscripts,
+  clearTranscriptCache,
   readTranscriptCache,
   writeTranscriptCache,
 } from "@/lib/transcriptCache";
@@ -71,6 +74,36 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "small", label: "Small", sizeMb: 466 },
   { name: "medium", label: "Medium", sizeMb: 1500 },
   { name: "large-v3-turbo", label: "Large v3 Turbo (recommended)", sizeMb: 1600 },
+];
+
+const WK_MODELS: { name: WhisperKitModel; label: string; sizeMb: number }[] = [
+  { name: "openai_whisper-tiny", label: "Tiny (~95 MB)", sizeMb: 95 },
+  { name: "openai_whisper-base", label: "Base (~190 MB)", sizeMb: 190 },
+  { name: "openai_whisper-small", label: "Small (~640 MB)", sizeMb: 640 },
+  { name: "openai_whisper-large-v3-turbo", label: "Large v3 Turbo · ANE (recommended)", sizeMb: 1700 },
+  { name: "openai_whisper-large-v3", label: "Large v3 · ANE (highest accuracy)", sizeMb: 3900 },
+];
+
+/** ISO 639-1 languages Whisper supports well. */
+const WHISPER_LANGUAGES: { code: string; label: string }[] = [
+  { code: "auto", label: "Auto-detect" },
+  { code: "en", label: "English" },
+  { code: "es", label: "Spanish" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "it", label: "Italian" },
+  { code: "pt", label: "Portuguese" },
+  { code: "nl", label: "Dutch" },
+  { code: "pl", label: "Polish" },
+  { code: "ru", label: "Russian" },
+  { code: "ja", label: "Japanese" },
+  { code: "zh", label: "Chinese" },
+  { code: "ko", label: "Korean" },
+  { code: "ar", label: "Arabic" },
+  { code: "hi", label: "Hindi" },
+  { code: "tr", label: "Turkish" },
+  { code: "sv", label: "Swedish" },
+  { code: "uk", label: "Ukrainian" },
 ];
 
 const MEDIA_EXTENSIONS = ["mp4", "mov", "m4v", "mkv", "webm", "m4a", "wav"];
@@ -90,11 +123,18 @@ function wordsForMedia(project: Project, mediaId: string) {
     .flatMap((segment) => segment.words);
 }
 
-function applyTranscriptToMedia(project: Project, mediaId: string, words: Word[]): Project {
+function applyTranscriptToMedia(
+  project: Project,
+  mediaId: string,
+  words: Word[],
+  force = false,
+): Project {
   return {
     ...project,
     segments: project.segments.map((segment) => {
-      if (segment.mediaId !== mediaId || segment.words.length > 0) return segment;
+      if (segment.mediaId !== mediaId) return segment;
+      // In normal mode skip segments that already have words; in force mode overwrite all.
+      if (!force && segment.words.length > 0) return segment;
       return {
         ...segment,
         words: words.filter(
@@ -134,7 +174,12 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [transcribeEngine, setTranscribeEngine] = useState<TranscriptionEngine>("whisper-cpp");
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("large-v3-turbo");
+  const [selectedWKModel, setSelectedWKModel] = useState<WhisperKitModel>("openai_whisper-large-v3-turbo");
+  const [transcribeLanguage, setTranscribeLanguage] = useState("auto");
+  const [transcribeTranslate, setTranscribeTranslate] = useState(false);
+  const [transcribeDiarize, setTranscribeDiarize] = useState(false);
   const [installedModels, setInstalledModels] = useState<ModelInfo[]>([]);
   const [exportSettings, setExportSettings] = useState({
     resolution: "original",
@@ -148,7 +193,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     forceReencode: false,
   });
   // Which model is currently being downloaded inside the dialog, and its progress.
-  const [downloadingModel, setDownloadingModel] = useState<WhisperModel | null>(null);
+  const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [musicDialogOpen, setMusicDialogOpen] = useState(false);
@@ -157,6 +202,11 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const [recording, setRecording] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState("Ready to record locally");
   const unlistenDownloadRef = useRef<(() => void) | null>(null);
+  /** Set to true before opening the model dialog when the user clicks Re-Transcribe. */
+  const forceRetranscribeRef = useRef(false);
+
+  /** True when at least one segment already has transcribed words. */
+  const hasTranscript = project.segments.some((s) => s.words.length > 0);
 
   async function handleOpen() {
     const path = await openDialog({
@@ -246,7 +296,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       title: `Downloading ${modelLabel}…`,
       description: "Needed once before local auto-transcription can run.",
     });
-    await downloadModel(selectedModel);
+    await downloadModel("whisper-cpp", selectedModel);
     setInstalledModels((prev) =>
       prev.map((m) => (m.name === selectedModel ? { ...m, installed: true } : m)),
     );
@@ -266,8 +316,12 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       const result = await transcribe({
         mediaId: media.id,
         mediaPath: media.path,
-        modelName: selectedModel,
+        engine: transcribeEngine,
+        modelName: transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel,
         mediaDuration: media.duration,
+        language: transcribeLanguage === "auto" ? undefined : transcribeLanguage,
+        translate: transcribeTranslate,
+        diarize: transcribeDiarize,
       });
       writeTranscriptCache(media, result.words);
       replaceProjectBaseline(
@@ -353,12 +407,21 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       pushToast({ title: "Open a video first", variant: "destructive" });
       return;
     }
+    forceRetranscribeRef.current = false;
+    await refreshModelList();
+    setModelDialogOpen(true);
+  }
+
+  async function handleReTranscribe() {
+    const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
+    if (mediaIds.length === 0) return;
+    forceRetranscribeRef.current = true;
     await refreshModelList();
     setModelDialogOpen(true);
   }
 
   /** Download a single model from within the dialog, updating inline progress. */
-  async function handleDownloadModel(name: WhisperModel) {
+  async function handleDownloadModel(name: string) {
     if (downloadingModel) return; // already downloading something
 
     setDownloadingModel(name);
@@ -371,13 +434,17 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     unlistenDownloadRef.current = unlisten;
 
     try {
-      await downloadModel(name);
+      await downloadModel(transcribeEngine, name);
       // Mark as installed in local state immediately.
       setInstalledModels((prev) =>
         prev.map((m) => (m.name === name ? { ...m, installed: true } : m)),
       );
       // Auto-select the freshly downloaded model.
-      setSelectedModel(name);
+      if (transcribeEngine === "whisper-kit") {
+        setSelectedWKModel(name as WhisperKitModel);
+      } else {
+        setSelectedModel(name as WhisperModel);
+      }
     } catch (err) {
       pushToast({
         title: "Download failed",
@@ -404,6 +471,9 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
   async function startTranscribe() {
     setModelDialogOpen(false);
+    const force = forceRetranscribeRef.current;
+    forceRetranscribeRef.current = false; // reset immediately
+
     const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
     if (mediaIds.length === 0) return;
 
@@ -411,29 +481,44 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     // Whisper event arrives so the user sees feedback right away.
     setTranscribeProgress(0);
 
+    if (force) {
+      pushToast({
+        title: "Re-transcribing…",
+        description: "Clearing existing transcript and starting fresh.",
+      });
+    }
+
     try {
       // ── Step 1: download the model if it isn't on disk yet ──────────────
-      const isInstalled = installedModels.find((m) => m.name === selectedModel)?.installed ?? false;
+      const activeModel = transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel;
+      const isInstalled = installedModels.find((m) => m.name === activeModel)?.installed ?? false;
       if (!isInstalled) {
-        const modelLabel = MODELS.find((m) => m.name === selectedModel)?.label ?? selectedModel;
         pushToast({
-          title: `Downloading ${modelLabel}…`,
+          title: `Downloading ${activeModel}…`,
           description: "This may take a few minutes. Progress shown in the toolbar.",
         });
-        await downloadModel(selectedModel);
+        await downloadModel(transcribeEngine, activeModel);
         pushToast({ title: "Model downloaded — starting transcription…" });
       }
 
-      // ── Step 2: transcribe ───────────────────────────────────────────────
+      // ── Step 2: clear caches when re-transcribing ────────────────────────
       let nextProject = useProjectStore.getState().project;
+      if (force) {
+        for (const mediaId of mediaIds) {
+          const media = nextProject.media[mediaId];
+          if (media) clearTranscriptCache(media);
+        }
+      }
+
+      // ── Step 3: transcribe each clip ─────────────────────────────────────
       let totalWords = 0;
       let transcribedClips = 0;
       for (const mediaId of mediaIds) {
         const media = nextProject.media[mediaId];
         if (!media) continue;
-        const cached = readTranscriptCache(media);
+        const cached = force ? null : readTranscriptCache(media);
         const existingWords = wordsForMedia(nextProject, mediaId);
-        if (existingWords.length > 0) {
+        if (!force && existingWords.length > 0) {
           totalWords += existingWords.length;
           continue;
         }
@@ -443,19 +528,23 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             await transcribe({
               mediaId,
               mediaPath: media.path,
-              modelName: selectedModel,
+              engine: transcribeEngine,
+              modelName: transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel,
               mediaDuration: media.duration,
+              language: transcribeLanguage === "auto" ? undefined : transcribeLanguage,
+              translate: transcribeTranslate,
+              diarize: transcribeDiarize,
             })
           ).words;
-        if (!cached) writeTranscriptCache(media, words);
-        nextProject = applyTranscriptToMedia(nextProject, mediaId, words);
+        writeTranscriptCache(media, words);
+        nextProject = applyTranscriptToMedia(nextProject, mediaId, words, force);
         totalWords += words.length;
         transcribedClips++;
       }
 
       replaceProjectBaseline(nextProject, { dirty: true, filePath });
       pushToast({
-        title: "Transcription complete",
+        title: force ? "Re-transcription complete" : "Transcription complete",
         description:
           transcribedClips > 0
             ? `${totalWords} words across ${mediaIds.length} clip${mediaIds.length === 1 ? "" : "s"}`
@@ -463,7 +552,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       });
     } catch (err) {
       pushToast({
-        title: "Transcription failed",
+        title: force ? "Re-transcription failed" : "Transcription failed",
         description: String(err),
         variant: "destructive",
       });
@@ -726,9 +815,15 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             size="sm"
             variant="ghost"
             className="tool-button tool-button-primary"
-            onClick={handleTranscribe}
+            title={
+              hasTranscript
+                ? "Clear existing transcript and re-run Whisper from scratch"
+                : "Transcribe audio with Whisper"
+            }
+            onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
           >
-            <MicVocal className="h-4 w-4" /> Transcribe
+            <MicVocal className="h-4 w-4" />
+            {hasTranscript ? "Re-Transcribe" : "Transcribe"}
           </Button>
           <Button
             size="sm"
@@ -821,43 +916,70 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Choose a Whisper model</DialogTitle>
+            <DialogTitle>
+              {forceRetranscribeRef.current ? "Re-Transcribe" : "Transcription settings"}
+            </DialogTitle>
             <DialogDescription>
-              Select a model to transcribe with. Download any model you don't have yet — larger
-              models are more accurate but slower.
+              {forceRetranscribeRef.current
+                ? "This will clear the existing transcript and re-run Whisper from scratch."
+                : "Choose an engine, model, and language. Larger models are more accurate but slower."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-2">
-            {MODELS.map((m) => {
+          {/* ── Engine picker ── */}
+          <div className="flex gap-1 rounded-md border border-border p-1">
+            {(["whisper-cpp", "whisper-kit"] as TranscriptionEngine[]).map((eng) => (
+              <button
+                key={eng}
+                type="button"
+                className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
+                  transcribeEngine === eng
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent"
+                }`}
+                onClick={() => setTranscribeEngine(eng)}
+              >
+                {eng === "whisper-cpp" ? "whisper.cpp · Core ML" : "WhisperKit · ANE"}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Model list ── */}
+          <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
+            {(transcribeEngine === "whisper-cpp" ? MODELS : WK_MODELS).map((m) => {
               const installed = installedModels.find((i) => i.name === m.name)?.installed ?? false;
               const isDownloading = downloadingModel === m.name;
               const isOtherDownloading = downloadingModel !== null && !isDownloading;
+              const isSelected =
+                transcribeEngine === "whisper-cpp"
+                  ? selectedModel === m.name
+                  : selectedWKModel === m.name;
 
               return (
                 <div
                   key={m.name}
                   className={`rounded-md border p-3 transition-colors ${
-                    selectedModel === m.name
-                      ? "border-primary bg-accent"
-                      : "border-border hover:bg-accent/50"
+                    isSelected ? "border-primary bg-accent" : "border-border hover:bg-accent/50"
                   }`}
                 >
-                  {/* Top row: radio + name + status */}
                   <div className="flex items-center justify-between">
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
                       <input
                         type="radio"
                         name="model"
                         value={m.name}
-                        checked={selectedModel === m.name}
+                        checked={isSelected}
                         disabled={!installed}
-                        onChange={() => setSelectedModel(m.name)}
+                        onChange={() => {
+                          if (transcribeEngine === "whisper-cpp") {
+                            setSelectedModel(m.name as WhisperModel);
+                          } else {
+                            setSelectedWKModel(m.name as WhisperKitModel);
+                          }
+                        }}
                       />
                       {m.label}
                     </label>
-
-                    {/* Right-side badge / button */}
                     {installed ? (
                       <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -879,24 +1001,73 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                         }}
                       >
                         <Download className="h-3 w-3" />
-                        {m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1)} GB` : `${m.sizeMb} MB`}
+                        {m.sizeMb >= 1000
+                          ? `${(m.sizeMb / 1000).toFixed(1)} GB`
+                          : `${m.sizeMb} MB`}
                       </Button>
                     )}
                   </div>
-
-                  {/* Inline download progress bar */}
                   {isDownloading && (
                     <div className="mt-2">
                       <Progress value={downloadProgress * 100} className="h-1.5" />
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Downloading… {Math.round(downloadProgress * 100)}% — do not close this
-                        window
+                        Downloading… {Math.round(downloadProgress * 100)}% — do not close
                       </p>
                     </div>
                   )}
                 </div>
               );
             })}
+          </div>
+
+          {/* ── Language / options ── */}
+          <div className="grid gap-3 rounded-md border border-border p-3">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              Source language
+              <select
+                className="h-8 rounded border border-input bg-background px-2 text-sm text-foreground"
+                value={transcribeLanguage}
+                onChange={(e) => setTranscribeLanguage(e.target.value)}
+              >
+                {WHISPER_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* translate + diarize — only meaningful for whisper.cpp */}
+            {transcribeEngine === "whisper-cpp" && (
+              <div className="flex flex-col gap-2">
+                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={transcribeTranslate}
+                    onChange={(e) => setTranscribeTranslate(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium">Translate to English</span>
+                    <span className="ml-1 text-muted-foreground">
+                      — output English regardless of source
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={transcribeDiarize}
+                    onChange={(e) => setTranscribeDiarize(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium">Speaker diarisation</span>
+                    <span className="ml-1 text-muted-foreground">
+                      — label who is speaking
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -911,10 +1082,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               onClick={startTranscribe}
               disabled={
                 downloadingModel !== null ||
-                !installedModels.find((m) => m.name === selectedModel)?.installed
+                !(transcribeEngine === "whisper-cpp"
+                  ? installedModels.find((m) => m.name === selectedModel)?.installed
+                  : installedModels.find((m) => m.name === selectedWKModel)?.installed)
               }
+              variant={forceRetranscribeRef.current ? "destructive" : "default"}
             >
-              Transcribe
+              {forceRetranscribeRef.current ? "Re-Transcribe" : "Transcribe"}
             </Button>
           </DialogFooter>
         </DialogContent>
