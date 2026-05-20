@@ -12,6 +12,7 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore, useTemporalProjectStore } from "@/stores/projectStore";
+import { wordIdToOutputTime } from "@/lib/edl";
 
 function isMac() {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -33,6 +34,19 @@ export function useKeyboardShortcuts() {
       if (e.key === " " && !inTextField) {
         e.preventDefault();
         const s = usePlayerStore.getState();
+        if (!s.playing && s.selectedWordIds.size > 0) {
+          const project = useProjectStore.getState().project;
+          let best: ReturnType<typeof wordIdToOutputTime> = null;
+          for (const id of s.selectedWordIds) {
+            const mapped = wordIdToOutputTime(project, id);
+            if (mapped && (!best || mapped.outputTime < best.outputTime)) best = mapped;
+          }
+          if (best) {
+            window.dispatchEvent(
+              new CustomEvent("scribe:seek-source", { detail: { start: best.sourceTime } }),
+            );
+          }
+        }
         s.setPlaying(!s.playing);
         return;
       }
@@ -54,6 +68,38 @@ export function useKeyboardShortcuts() {
         const s = usePlayerStore.getState();
         s.setRate(Math.min(4, s.rate * 2));
         s.setPlaying(true);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "i" && !inTextField) {
+        e.preventDefault();
+        const s = usePlayerStore.getState();
+        s.setTimelineRange(s.currentTime, s.timelineMarkOut);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "o" && !inTextField) {
+        e.preventDefault();
+        const s = usePlayerStore.getState();
+        s.setTimelineRange(s.timelineMarkIn, s.currentTime);
+        return;
+      }
+
+      if (mod && (e.key === "Backspace" || e.key === "Delete")) {
+        const player = usePlayerStore.getState();
+        const projectStore = useProjectStore.getState();
+        const hasRange = player.timelineMarkIn !== null && player.timelineMarkOut !== null;
+        const selectedIds = [...player.selectedWordIds];
+        if (!hasRange && selectedIds.length === 0) return;
+        e.preventDefault();
+        if (hasRange) {
+          projectStore.deleteOutputRange(player.timelineMarkIn!, player.timelineMarkOut!);
+          player.clearTimelineRange();
+          player.setSelectedWordIds([]);
+          return;
+        }
+        projectStore.deleteWords(selectedIds);
+        player.setSelectedWordIds([]);
         return;
       }
 

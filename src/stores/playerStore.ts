@@ -20,6 +20,9 @@ interface PlayerState {
   muted: boolean;
   /** Playback rate. */
   rate: number;
+  /** Output-time in/out selection from the timeline. */
+  timelineMarkIn: number | null;
+  timelineMarkOut: number | null;
 
   // Setters used by the <video> element / transcript editor
   setCurrentTime: (t: number) => void;
@@ -27,6 +30,9 @@ interface PlayerState {
   setSelectedWordIds: (ids: Iterable<string>) => void;
   toggleMuted: () => void;
   setRate: (r: number) => void;
+  setTimelineRange: (markIn: number | null, markOut: number | null) => void;
+  clearTimelineRange: () => void;
+  reset: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set) => ({
@@ -35,10 +41,24 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   selectedWordIds: new Set(),
   muted: false,
   rate: 1.0,
+  timelineMarkIn: null,
+  timelineMarkOut: null,
 
   setCurrentTime: (t) => set({ currentTime: t }),
   setPlaying: (p) => set({ playing: p }),
   setSelectedWordIds: (ids) => set({ selectedWordIds: new Set(ids) }),
   toggleMuted: () => set((s) => ({ muted: !s.muted })),
   setRate: (r) => set({ rate: r }),
+  setTimelineRange: (markIn, markOut) => set({ timelineMarkIn: markIn, timelineMarkOut: markOut }),
+  clearTimelineRange: () => set({ timelineMarkIn: null, timelineMarkOut: null }),
+  reset: () =>
+    set({
+      currentTime: 0,
+      playing: false,
+      selectedWordIds: new Set(),
+      muted: false,
+      rate: 1.0,
+      timelineMarkIn: null,
+      timelineMarkOut: null,
+    }),
 }));

@@ -24,9 +24,20 @@ import {
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { CheckCircle2, Download, FilePlus2, FolderOpen, MicVocal, Save, Scissors } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  FilePlus2,
+  FolderOpen,
+  MicVocal,
+  Power,
+  Save,
+  Scissors,
+  Settings2,
+} from "lucide-react";
 import { formatDuration } from "@/lib/timecode";
-import { newProject, totalDuration } from "@/lib/edl";
+import { addMediaWithTranscript as buildProjectWithMedia, newProject, totalDuration } from "@/lib/edl";
+import { usePlayerStore } from "@/stores/playerStore";
 
 const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "tiny", label: "Tiny (fast, lower accuracy)", sizeMb: 75 },
@@ -41,17 +52,30 @@ export function Toolbar() {
   const dirty = useProjectStore((s) => s.dirty);
   const filePath = useProjectStore((s) => s.filePath);
   const setProject = useProjectStore((s) => s.setProject);
-  const addMediaWithTranscript = useProjectStore((s) => s.addMediaWithTranscript);
   const markSaved = useProjectStore((s) => s.markSaved);
+  const closeProject = useProjectStore((s) => s.closeProject);
 
   const transcribeProgress = useUIStore((s) => s.transcribeProgress);
   const exportingProgress = useUIStore((s) => s.exportingProgress);
   const modelDownloadProgress = useUIStore((s) => s.modelDownloadProgress);
+  const mediaLoading = useUIStore((s) => s.mediaLoading);
   const pushToast = useUIStore((s) => s.pushToast);
+  const setMediaLoading = useUIStore((s) => s.setMediaLoading);
+  const displayName = filePath?.split(/[\\/]/).pop() ?? `${project.name}.scribe`;
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("large-v3-turbo");
   const [installedModels, setInstalledModels] = useState<ModelInfo[]>([]);
+  const [exportSettings, setExportSettings] = useState({
+    resolution: "1080p",
+    customWidth: 1920,
+    customHeight: 1080,
+    videoBitrateKbps: 8000,
+    audioBitrateKbps: 192,
+    fps: "",
+    codec: "h264" as "h264" | "hevc",
+  });
   // Which model is currently being downloaded inside the dialog, and its progress.
   const [downloadingModel, setDownloadingModel] = useState<WhisperModel | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -63,10 +87,14 @@ export function Toolbar() {
       filters: [{ name: "Video", extensions: ["mp4", "mov", "m4v", "mkv"] }],
     });
     if (typeof path !== "string") return;
+    setMediaLoading(true);
     try {
       const media = await importMedia(path);
-      // Initialise an empty transcript — user must press Transcribe.
-      addMediaWithTranscript(media, []);
+      const name = media.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Untitled";
+      const nextProject = buildProjectWithMedia(newProject(name), media, []);
+      useProjectStore.temporal.getState().clear();
+      resetPlayer();
+      setProject(nextProject);
       pushToast({ title: "Media imported", description: media.path });
     } catch (err) {
       pushToast({
@@ -74,7 +102,20 @@ export function Toolbar() {
         description: String(err),
         variant: "destructive",
       });
+    } finally {
+      setMediaLoading(false);
     }
+  }
+
+  function resetPlayer() {
+    usePlayerStore.getState().reset();
+  }
+
+  function handleCloseProject() {
+    closeProject();
+    useProjectStore.temporal.getState().clear();
+    resetPlayer();
+    pushToast({ title: "Project closed" });
   }
 
   async function refreshModelList() {
@@ -219,17 +260,36 @@ export function Toolbar() {
     }
   }, [filePath, project, markSaved, pushToast]);
 
-  const handleExport = useCallback(async () => {
+  const runExport = useCallback(async () => {
     const outPath = await saveDialog({
       defaultPath: `${project.name}.mp4`,
       filters: [{ name: "MP4", extensions: ["mp4"] }],
     });
     if (!outPath) return;
+    const resolution = exportSettings.resolution;
+    const dims =
+      resolution === "original"
+        ? {}
+        : resolution === "720p"
+          ? { width: 1280, height: 720 }
+          : resolution === "1080p"
+            ? { width: 1920, height: 1080 }
+            : resolution === "4k"
+              ? { width: 3840, height: 2160 }
+              : {
+                  width: Math.max(16, exportSettings.customWidth),
+                  height: Math.max(16, exportSettings.customHeight),
+                };
     try {
       await exportVideo({
         project,
         outputPath: outPath,
         preset: project.settings.exportPreset,
+        ...dims,
+        codec: exportSettings.codec,
+        fps: exportSettings.fps ? Number(exportSettings.fps) : undefined,
+        videoBitrateKbps: exportSettings.videoBitrateKbps,
+        audioBitrateKbps: exportSettings.audioBitrateKbps,
       });
       pushToast({ title: "Export complete", description: outPath });
     } catch (err) {
@@ -239,6 +299,14 @@ export function Toolbar() {
         variant: "destructive",
       });
     }
+  }, [exportSettings, project, pushToast]);
+
+  const handleExport = useCallback(() => {
+    if (Object.keys(project.media).length === 0 || project.segments.length === 0) {
+      pushToast({ title: "Nothing to export", variant: "destructive" });
+      return;
+    }
+    setExportDialogOpen(true);
   }, [project, pushToast]);
 
   useEffect(() => {
@@ -251,76 +319,83 @@ export function Toolbar() {
   }, [handleSave, handleExport]);
 
   return (
-    <div className="flex h-12 items-center gap-1 border-b border-border bg-background px-3">
-      <div className="flex items-center gap-1">
-        <Button size="sm" variant="ghost" onClick={handleOpen}>
-          <FolderOpen className="mr-1 h-4 w-4" /> Open
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setProject(newProject("Untitled"))}>
-          <FilePlus2 className="mr-1 h-4 w-4" /> New
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={async () => {
-            const path = await openDialog({
-              multiple: false,
-              filters: [{ name: "Scribe project", extensions: ["scribe"] }],
-            });
-            if (typeof path !== "string") return;
-            try {
-              const loaded = await loadProject(path);
-              setProject(loaded);
-              markSaved(path);
-              pushToast({ title: "Project opened", description: path });
-            } catch (err) {
-              pushToast({
-                title: "Failed to open project",
-                description: String(err),
-                variant: "destructive",
+    <div className="editor-toolbar">
+      <div className="editor-toolbar-top">
+        <div className="traffic-lights" aria-hidden="true">
+          <span className="bg-[#ff5f57]" />
+          <span className="bg-[#febc2e]" />
+          <span className="bg-[#28c840]" />
+        </div>
+
+        <div className="toolbar-title">
+          <span>{displayName}</span>
+          <span>{dirty ? "unsaved edits" : "no edits"}</span>
+        </div>
+
+        <div className="toolbar-export">
+          <span className="toolbar-duration">{formatDuration(totalDuration(project))}</span>
+          <Button size="sm" onClick={handleExport} className="h-8 gap-2 rounded-md px-3 font-semibold">
+            <Download className="h-4 w-4" /> Export .mp4
+          </Button>
+        </div>
+      </div>
+
+      <div className="editor-toolbar-bottom">
+        <div className="tool-group">
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+            <FolderOpen className="h-4 w-4" /> Open Media
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            onClick={() => {
+              setProject(newProject("Untitled"));
+              useProjectStore.temporal.getState().clear();
+              resetPlayer();
+            }}
+          >
+            <FilePlus2 className="h-4 w-4" /> New
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            onClick={async () => {
+              const path = await openDialog({
+                multiple: false,
+                filters: [{ name: "Scribe project", extensions: ["scribe"] }],
               });
-            }
-          }}
-        >
-          <FolderOpen className="mr-1 h-4 w-4" /> Open Project
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleSave}>
-          <Save className="mr-1 h-4 w-4" /> Save {dirty && "*"}
-        </Button>
-      </div>
+              if (typeof path !== "string") return;
+              try {
+                const loaded = await loadProject(path);
+                setProject(loaded);
+                markSaved(path);
+                pushToast({ title: "Project opened", description: path });
+              } catch (err) {
+                pushToast({
+                  title: "Failed to open project",
+                  description: String(err),
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            <FolderOpen className="h-4 w-4" /> Project
+          </Button>
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+            <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+          </Button>
+        </div>
 
-      <div className="ml-4 flex items-center gap-1 border-l border-border pl-4">
-        <Button size="sm" variant="ghost" onClick={handleTranscribe}>
-          <MicVocal className="mr-1 h-4 w-4" /> Transcribe
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleExport}>
-          <Download className="mr-1 h-4 w-4" /> Export
-        </Button>
-      </div>
-
-      <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-        {modelDownloadProgress !== null && (
-          <div className="flex w-52 items-center gap-2">
-            <Download className="h-3 w-3 shrink-0" />
-            <span className="shrink-0">Downloading…</span>
-            <Progress value={modelDownloadProgress * 100} className="flex-1" />
-          </div>
-        )}
-        {transcribeProgress !== null && (
-          <div className="flex w-44 items-center gap-2">
-            <MicVocal className="h-3 w-3 shrink-0" />
-            <span className="shrink-0">Transcribing…</span>
-            <Progress value={transcribeProgress * 100} className="flex-1" />
-          </div>
-        )}
-        {exportingProgress !== null && (
-          <div className="flex w-44 items-center gap-2">
-            <Scissors className="h-3 w-3 shrink-0" />
-            <span className="shrink-0">Exporting…</span>
-            <Progress value={exportingProgress * 100} className="flex-1" />
-          </div>
-        )}
-        <span>{formatDuration(totalDuration(project))}</span>
+        <div className="tool-group">
+          <Button size="sm" variant="ghost" className="tool-button tool-button-primary" onClick={handleTranscribe}>
+            <MicVocal className="h-4 w-4" /> Transcribe
+          </Button>
+          <Button size="sm" variant="ghost" className="tool-button tool-button-danger" onClick={handleCloseProject}>
+            <Power className="h-4 w-4" /> Close
+          </Button>
+        </div>
       </div>
 
       <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
@@ -422,6 +497,236 @@ export function Toolbar() {
               Transcribe
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Export video</DialogTitle>
+            <DialogDescription>
+              Choose output resolution and quality before rendering the edited timeline.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-1">
+            <label className="grid gap-1.5 text-sm">
+              Resolution
+              <select
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={exportSettings.resolution}
+                onChange={(e) => setExportSettings((s) => ({ ...s, resolution: e.target.value }))}
+              >
+                <option value="original">Original</option>
+                <option value="720p">1280 x 720</option>
+                <option value="1080p">1920 x 1080</option>
+                <option value="4k">3840 x 2160</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+
+            {exportSettings.resolution === "custom" && (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="grid gap-1.5 text-sm">
+                  Width
+                  <input
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    type="number"
+                    min={16}
+                    step={2}
+                    value={exportSettings.customWidth}
+                    onChange={(e) =>
+                      setExportSettings((s) => ({ ...s, customWidth: Number(e.target.value) }))
+                    }
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm">
+                  Height
+                  <input
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    type="number"
+                    min={16}
+                    step={2}
+                    value={exportSettings.customHeight}
+                    onChange={(e) =>
+                      setExportSettings((s) => ({ ...s, customHeight: Number(e.target.value) }))
+                    }
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1.5 text-sm">
+                Codec
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={exportSettings.codec}
+                  onChange={(e) =>
+                    setExportSettings((s) => ({ ...s, codec: e.target.value as "h264" | "hevc" }))
+                  }
+                >
+                  <option value="h264">H.264</option>
+                  <option value="hevc">HEVC</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Frame rate
+                <input
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  type="number"
+                  min={1}
+                  step={1}
+                  placeholder="Original"
+                  value={exportSettings.fps}
+                  onChange={(e) => setExportSettings((s) => ({ ...s, fps: e.target.value }))}
+                />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1.5 text-sm">
+                Video bitrate
+                <div className="flex items-center gap-2">
+                  <input
+                    className="flex-1"
+                    type="range"
+                    min={1500}
+                    max={30000}
+                    step={500}
+                    value={exportSettings.videoBitrateKbps}
+                    onChange={(e) =>
+                      setExportSettings((s) => ({
+                        ...s,
+                        videoBitrateKbps: Number(e.target.value),
+                      }))
+                    }
+                  />
+                  <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
+                    {(exportSettings.videoBitrateKbps / 1000).toFixed(1)} Mbps
+                  </span>
+                </div>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Audio bitrate
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={exportSettings.audioBitrateKbps}
+                  onChange={(e) =>
+                    setExportSettings((s) => ({
+                      ...s,
+                      audioBitrateKbps: Number(e.target.value),
+                    }))
+                  }
+                >
+                  <option value={128}>128 kbps</option>
+                  <option value={192}>192 kbps</option>
+                  <option value={256}>256 kbps</option>
+                  <option value={320}>320 kbps</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setExportDialogOpen(false);
+                void runExport();
+              }}
+              className="gap-2"
+            >
+              <Settings2 className="h-4 w-4" />
+              Export .mp4
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={transcribeProgress !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MicVocal className="h-4 w-4 text-primary" />
+              Transcribing media
+            </DialogTitle>
+            <DialogDescription>
+              Scribe is building the word-level edit timeline locally on this Mac.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={(transcribeProgress ?? 0) * 100} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Whisper running locally</span>
+              <span>{Math.round((transcribeProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mediaLoading} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4 text-primary" />
+              Loading media
+            </DialogTitle>
+            <DialogDescription>
+              Probing the file and preparing it for local playback.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={55} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Reading metadata</span>
+              <span>Local file</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={exportingProgress !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="h-4 w-4 text-primary" />
+              Exporting video
+            </DialogTitle>
+            <DialogDescription>
+              Rendering the edited timeline with your selected export settings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={(exportingProgress ?? 0) * 100} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Writing .mp4</span>
+              <span>{Math.round((exportingProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modelDownloadProgress !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-4 w-4 text-primary" />
+              Downloading model
+            </DialogTitle>
+            <DialogDescription>
+              Preparing the local transcription model.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={(modelDownloadProgress ?? 0) * 100} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Model download</span>
+              <span>{Math.round((modelDownloadProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

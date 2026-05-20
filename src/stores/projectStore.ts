@@ -14,6 +14,7 @@ import {
   addMediaWithTranscript,
   deleteWords,
   newProject,
+  wordIdsInOutputRange,
   type Project,
   type SourceMedia,
   type Word,
@@ -31,6 +32,7 @@ interface ProjectState {
   rename: (name: string) => void;
   addMediaWithTranscript: (media: SourceMedia, words: Word[]) => void;
   deleteWords: (ids: Iterable<string>) => void;
+  deleteOutputRange: (markIn: number, markOut: number) => number;
   /** Delete every word whose text (case-insensitive, punctuation-stripped)
    *  matches one of the given tokens. Returns the count of words removed. */
   deleteWordsByText: (tokens: ReadonlySet<string>) => number;
@@ -38,6 +40,7 @@ interface ProjectState {
    *  with `replace`. Returns the count of replacements made. */
   replaceText: (find: string, replace: string, opts?: { caseSensitive?: boolean; wholeWord?: boolean }) => number;
   markSaved: (path: string) => void;
+  closeProject: () => void;
 }
 
 /** Strip surrounding punctuation/whitespace and lowercase. */
@@ -74,6 +77,17 @@ export const useProjectStore = create<ProjectState>()(
           project: deleteWords(s.project, new Set(ids)),
           dirty: true,
         })),
+
+      deleteOutputRange: (markIn, markOut) => {
+        const project = _get().project;
+        const ids = wordIdsInOutputRange(project, markIn, markOut);
+        if (ids.length === 0) return 0;
+        set({
+          project: deleteWords(project, new Set(ids)),
+          dirty: true,
+        });
+        return ids.length;
+      },
 
       deleteWordsByText: (tokens) => {
         let removed = 0;
@@ -140,6 +154,13 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       markSaved: (path) => set({ dirty: false, filePath: path }),
+
+      closeProject: () =>
+        set({
+          project: newProject("Untitled"),
+          dirty: false,
+          filePath: null,
+        }),
     }),
     {
       // Per spec: cap undo at 50 steps.

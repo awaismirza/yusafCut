@@ -25,6 +25,14 @@ pub struct ExportOpts {
     pub video_bitrate_kbps: Option<u32>,
     #[serde(rename = "audioBitrateKbps", default)]
     pub audio_bitrate_kbps: Option<u32>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    #[serde(default)]
+    pub fps: Option<f64>,
+    #[serde(default)]
+    pub codec: Option<String>,
 }
 
 #[tauri::command]
@@ -60,11 +68,21 @@ pub async fn export_video(
     // Build the filter graph: trim each segment, then concat.
     let mut filter = String::new();
     let mut concat_inputs = String::new();
+    let mut video_tail = String::new();
+    if let (Some(w), Some(h)) = (opts.width, opts.height) {
+        let _ = write!(video_tail, ",scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2");
+    }
+    if let Some(fps) = opts.fps {
+        if fps > 0.0 {
+            let _ = write!(video_tail, ",fps={fps}");
+        }
+    }
+
     for (i, (input_idx, sin, sout)) in clip_specs.iter().enumerate() {
         // Video and audio trims
         let _ = writeln!(
             filter,
-            "[{input_idx}:v]trim=start={sin}:end={sout},setpts=PTS-STARTPTS[v{i}];\
+            "[{input_idx}:v]trim=start={sin}:end={sout},setpts=PTS-STARTPTS{video_tail}[v{i}];\
              [{input_idx}:a]atrim=start={sin}:end={sout},asetpts=PTS-STARTPTS[a{i}];"
         );
         let _ = write!(concat_inputs, "[v{i}][a{i}]");
@@ -104,28 +122,36 @@ pub async fn export_video(
     }
 
     // Preset → codec / bitrate
+    let video_codec = match opts.codec.as_deref() {
+        Some("hevc") => "hevc_videotoolbox",
+        _ => "h264_videotoolbox",
+    };
+
     match opts.preset {
         ExportPreset::Youtube1080p => {
+            let vb = opts.video_bitrate_kbps.unwrap_or(8000);
+            let ab = opts.audio_bitrate_kbps.unwrap_or(192);
             argv.extend([
-                "-c:v".into(), "h264_videotoolbox".into(),
-                "-b:v".into(), "8M".into(),
+                "-c:v".into(), video_codec.into(),
+                "-b:v".into(), format!("{vb}k"),
                 "-c:a".into(), "aac".into(),
-                "-b:a".into(), "192k".into(),
+                "-b:a".into(), format!("{ab}k"),
                 "-movflags".into(), "+faststart".into(),
             ]);
         }
         ExportPreset::PodcastAudio => {
+            let ab = opts.audio_bitrate_kbps.unwrap_or(128);
             argv.extend([
                 "-vn".into(),
                 "-c:a".into(), "aac".into(),
-                "-b:a".into(), "128k".into(),
+                "-b:a".into(), format!("{ab}k"),
             ]);
         }
         ExportPreset::Custom => {
             let vb = opts.video_bitrate_kbps.unwrap_or(8000);
             let ab = opts.audio_bitrate_kbps.unwrap_or(192);
             argv.extend([
-                "-c:v".into(), "h264_videotoolbox".into(),
+                "-c:v".into(), video_codec.into(),
                 "-b:v".into(), format!("{vb}k"),
                 "-c:a".into(), "aac".into(),
                 "-b:a".into(), format!("{ab}k"),

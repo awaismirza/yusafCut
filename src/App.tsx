@@ -37,15 +37,9 @@ export default function App() {
   });
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  // Follow system dark mode
+  // Scribe is an editing surface; keep the chrome consistently dark like an NLE.
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      document.documentElement.dataset.theme = mq.matches ? "dark" : "light";
-    };
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    document.documentElement.dataset.theme = "dark";
   }, []);
 
   // Persist the chosen panel width.
@@ -165,7 +159,7 @@ export default function App() {
 
       {/* Full-width waveform — only when media is loaded */}
       {hasMedia && (
-        <div className="h-[88px] shrink-0 border-t border-border bg-background">
+        <div className="h-[154px] shrink-0 border-t border-border bg-background">
           <Waveform />
         </div>
       )}

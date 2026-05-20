@@ -8,8 +8,11 @@ import {
   newProject,
   nextSurvivingSegment,
   outputTimeToSource,
+  sourceTimeToOutput,
   splitSegmentAtWord,
   totalDuration,
+  wordIdToOutputTime,
+  wordIdsInOutputRange,
   type SourceMedia,
   type Word,
 } from "@/lib/edl";
@@ -128,6 +131,76 @@ describe("EDL — pure functions", () => {
       expect(outputTimeToSource(p, 3)?.sourceTime).toBe(6);
       // Past the end
       expect(outputTimeToSource(p, 99)).toBeNull();
+    });
+  });
+
+  describe("sourceTimeToOutput", () => {
+    it("maps surviving source time back to output time", () => {
+      const p = newProject("t");
+      p.segments = [
+        { id: "a", mediaId: "m", words: [], sourceIn: 0, sourceOut: 2 },
+        { id: "b", mediaId: "m", words: [], sourceIn: 5, sourceOut: 7 },
+      ];
+      expect(sourceTimeToOutput(p, "m", 1)?.outputTime).toBe(1);
+      expect(sourceTimeToOutput(p, "m", 6)?.outputTime).toBe(3);
+      expect(sourceTimeToOutput(p, "m", 4)).toBeNull();
+    });
+  });
+
+  describe("wordIdToOutputTime", () => {
+    it("uses output order when locating a selected word", () => {
+      const p = newProject("t");
+      p.segments = [
+        {
+          id: "a",
+          mediaId: "m",
+          words: [{ id: "w-a", text: "a", start: 0.25, end: 0.5, confidence: 1 }],
+          sourceIn: 0,
+          sourceOut: 2,
+        },
+        {
+          id: "b",
+          mediaId: "m",
+          words: [{ id: "w-b", text: "b", start: 5.5, end: 6, confidence: 1 }],
+          sourceIn: 5,
+          sourceOut: 7,
+        },
+      ];
+      expect(wordIdToOutputTime(p, "w-a")?.outputTime).toBeCloseTo(0.25);
+      expect(wordIdToOutputTime(p, "w-b")?.outputTime).toBeCloseTo(2.5);
+      expect(wordIdToOutputTime(p, "missing")).toBeNull();
+    });
+  });
+
+  describe("wordIdsInOutputRange", () => {
+    it("finds words overlapping an output-time timeline selection", () => {
+      const p = newProject("t");
+      p.segments = [
+        {
+          id: "a",
+          mediaId: "m",
+          words: [
+            { id: "w-a", text: "a", start: 0, end: 0.5, confidence: 1 },
+            { id: "w-b", text: "b", start: 0.5, end: 1, confidence: 1 },
+          ],
+          sourceIn: 0,
+          sourceOut: 1,
+        },
+        {
+          id: "b",
+          mediaId: "m",
+          words: [
+            { id: "w-c", text: "c", start: 5, end: 5.5, confidence: 1 },
+            { id: "w-d", text: "d", start: 5.5, end: 6, confidence: 1 },
+          ],
+          sourceIn: 5,
+          sourceOut: 6,
+        },
+      ];
+
+      expect(wordIdsInOutputRange(p, 0.25, 1.25)).toEqual(["w-a", "w-b", "w-c"]);
+      expect(wordIdsInOutputRange(p, 1.25, 0.25)).toEqual(["w-a", "w-b", "w-c"]);
+      expect(wordIdsInOutputRange(p, 2, 2)).toEqual([]);
     });
   });
 

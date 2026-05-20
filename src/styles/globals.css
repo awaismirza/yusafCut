@@ -71,6 +71,103 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   EDITOR TOOLBAR
+   ════════════════════════════════════════════════════════════════════════ */
+.editor-toolbar {
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(30 5% 9%);
+  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.03) inset;
+}
+.editor-toolbar-top {
+  height: 38px;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr);
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 1px solid hsl(var(--border) / 0.75);
+}
+.traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.traffic-lights span {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px hsl(0 0% 0% / 0.25) inset;
+}
+.toolbar-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  color: hsl(var(--foreground) / 0.9);
+  font: 700 13px/1 ui-sans-serif, system-ui, sans-serif;
+}
+.toolbar-title span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(44vw, 520px);
+}
+.toolbar-title span:last-child {
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+.toolbar-export {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.toolbar-duration {
+  color: hsl(var(--muted-foreground));
+  font: 600 11px/1 ui-monospace, 'Cascadia Code', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.editor-toolbar-bottom {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  overflow: hidden;
+}
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.tool-button {
+  height: 26px;
+  gap: 6px;
+  border-radius: 5px;
+  padding: 0 9px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 600;
+}
+.tool-button:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+}
+.tool-button-primary {
+  color: hsl(var(--foreground));
+  background: hsl(var(--primary) / 0.12);
+}
+.tool-button-danger:hover {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.11);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    TRANSCRIPT EDITOR
    ════════════════════════════════════════════════════════════════════════ */
 
@@ -381,4 +478,151 @@
   font: 600 10.5px/1 ui-monospace, monospace;
   margin-left: 6px;
   border: 1px solid hsl(var(--filler) / 0.40);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   OUTPUT TIMELINE
+   ════════════════════════════════════════════════════════════════════════ */
+.timeline-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: hsl(30 5% 7%);
+  color: hsl(var(--muted-foreground));
+}
+.timeline-header {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid hsl(var(--border));
+  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.timeline-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.timeline-title span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.timeline-title i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.legend-audio { background: hsl(var(--muted-foreground)); }
+.legend-filler { background: hsl(var(--filler)); }
+.legend-selected { background: hsl(var(--primary)); }
+.timeline-help {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground) / 0.72);
+  font: 500 11px/1 ui-monospace, 'Cascadia Code', monospace;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.timeline-rail {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+.timeline-ticks {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 28px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.timeline-ticks span {
+  position: absolute;
+  top: 8px;
+  transform: translateX(-50%);
+  color: hsl(var(--muted-foreground) / 0.65);
+  font: 500 10px/1 ui-monospace, 'Cascadia Code', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-ticks span::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  height: 76px;
+  border-left: 1px solid hsl(var(--border) / 0.45);
+}
+.timeline-bars {
+  position: absolute;
+  inset: 35px 0 12px;
+}
+.timeline-bar {
+  position: absolute;
+  bottom: 0;
+  min-width: 2px;
+  border-radius: 2px;
+  background: hsl(var(--muted-foreground) / 0.78);
+  box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.05);
+}
+.timeline-bar.is-filler {
+  background: hsl(var(--filler));
+  box-shadow: 0 0 0 1px hsl(var(--filler) / 0.35);
+}
+.timeline-bar.is-selected {
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.55), 0 0 12px hsl(var(--primary) / 0.18);
+}
+.timeline-selection {
+  position: absolute;
+  top: 28px;
+  bottom: 0;
+  background: hsl(var(--primary) / 0.12);
+  border-left: 2px solid hsl(var(--primary));
+  border-right: 2px solid hsl(var(--primary));
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.15);
+  pointer-events: none;
+}
+.timeline-selection .mark-in,
+.timeline-selection .mark-out {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 18px;
+  background: hsl(var(--primary));
+}
+.timeline-selection .mark-in {
+  left: -5px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 65%);
+}
+.timeline-selection .mark-out {
+  right: -5px;
+  clip-path: polygon(0 0, 100% 0, 100% 65%, 0 100%);
+}
+.timeline-playhead {
+  position: absolute;
+  top: 28px;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid hsl(var(--primary));
+  filter: drop-shadow(0 0 5px hsl(var(--primary) / 0.45));
+}
+.timeline-playhead span {
+  position: absolute;
+  left: -6px;
+  top: -1px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 10px solid hsl(var(--primary));
 }
