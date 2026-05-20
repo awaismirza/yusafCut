@@ -16,6 +16,7 @@ export default [
         window: "readonly",
         document: "readonly",
         navigator: "readonly",
+        localStorage: "readonly",
         console: "readonly",
         crypto: "readonly",
         React: "readonly",
@@ -25,6 +26,8 @@ export default [
         setInterval: "readonly",
         clearInterval: "readonly",
         // DOM element types
+        Element: "readonly",
+        Node: "readonly",
         HTMLElement: "readonly",
         HTMLButtonElement: "readonly",
         HTMLVideoElement: "readonly",
@@ -37,6 +40,7 @@ export default [
         MutationObserver: "readonly",
         ResizeObserver: "readonly",
         DOMException: "readonly",
+        MediaError: "readonly",
         // DOM event types
         KeyboardEvent: "readonly",
         MouseEvent: "readonly",

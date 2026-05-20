@@ -1,11 +1,10 @@
 /**
  * The primary editing surface — TipTap renders the transcript with each word as
- * a WordNode. Click → seek + play. Select → highlight. Delete → drop from EDL.
+ * a read-only WordNode. Click → seek + play. Select → highlight. Delete → drop
+ * from the EDL.
  *
  * Layout:
  *   ┌─────────────────────────────────────────────────────────────┐
- *   │  Find / Replace panel  (collapsible, ⌘F to toggle)          │
- *   ├─────────────────────────────────────────────────────────────┤
  *   │                                                              │
  *   │   00:12  Lorem ipsum dolor sit amet…                         │
  *   │                                                              │
@@ -24,13 +23,12 @@ import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import { FILLER_WORDS, WordNode } from "./WordNode";
-import { FindReplacePanel } from "./FindReplacePanel";
 import { useProjectStore, useTemporalProjectStore } from "@/stores/projectStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { computeTimeline, type Word } from "@/lib/edl";
 import { formatTimecode } from "@/lib/timecode";
 import { Button } from "@/components/ui/button";
-import { Eraser, RotateCcw, Search } from "lucide-react";
+import { Eraser, RotateCcw } from "lucide-react";
 
 /** Friendly names for speaker IDs found in the transcript. */
 const SPEAKER_NAMES: Record<string, string> = {
@@ -85,16 +83,39 @@ function stamp(seconds: number): string {
   return formatTimecode(seconds, { ms: false });
 }
 
+function getSelectedWordIds(root: HTMLElement): string[] {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return [];
+  const range = selection.getRangeAt(0);
+  const ids: string[] = [];
+  root.querySelectorAll<HTMLElement>("[data-word-id]").forEach((el) => {
+    try {
+      if (range.intersectsNode(el)) {
+        const id = el.dataset.wordId;
+        if (id) ids.push(id);
+      }
+    } catch {
+      // Firefox/WebKit can throw for detached nodes during fast re-renders.
+    }
+  });
+  return ids;
+}
+
+function nodeIsInside(root: HTMLElement, node: Node | null): boolean {
+  if (!node) return false;
+  const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return !!el && root.contains(el);
+}
+
 export function TranscriptEditor() {
   const project = useProjectStore((s) => s.project);
-  const deleteWords = useProjectStore((s) => s.deleteWords);
   const deleteWordsByText = useProjectStore((s) => s.deleteWordsByText);
   const setSelectedWordIds = usePlayerStore((s) => s.setSelectedWordIds);
+  const selectedWordIds = usePlayerStore((s) => s.selectedWordIds);
   const undo = useTemporalProjectStore((t) => t.undo);
   const pastStates = useTemporalProjectStore((t) => t.pastStates);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const [showFind, setShowFind] = useState(false);
 
   // Track each paragraph's vertical position so we can render the floating
   // timestamp column at exactly the same y as its <p>.
@@ -130,66 +151,24 @@ export function TranscriptEditor() {
 
   const editor = useEditor({
     extensions: [Document, Paragraph, Text, WordNode],
-    editable: true,
+    editable: false,
     content: { type: "doc", content: [] },
     editorProps: {
       attributes: {
         class: "transcript-editor",
       },
-      handleClickOn(_view, _pos, node, _nodePos, event) {
-        if (node.type.name === "word") {
-          const start = Number(node.attrs.start);
-          // Seek video to this word's source timestamp and start playback.
-          window.dispatchEvent(
-            new CustomEvent("scribe:seek-source", { detail: { start } }),
-          );
-          // Also flip the store so the Play button icon updates.
-          usePlayerStore.getState().setPlaying(true);
-          event.preventDefault();
-          return true;
-        }
-        return false;
-      },
-      handleKeyDown(_view, event) {
-        // ⌘F / Ctrl+F → toggle the find panel
-        const mod = event.metaKey || event.ctrlKey;
-        if (mod && event.key.toLowerCase() === "f") {
-          event.preventDefault();
-          setShowFind((v) => !v);
-          return true;
-        }
-        if (event.key === "Backspace" || event.key === "Delete") {
-          const sel = window.getSelection();
-          if (!sel || sel.isCollapsed) return false;
-          const range = sel.getRangeAt(0);
-          const fragment = range.cloneContents();
-          const wordEls = fragment.querySelectorAll<HTMLElement>("[data-word-id]");
-          const ids: string[] = [];
-          wordEls.forEach((el) => {
-            const id = el.dataset.wordId;
-            if (id) ids.push(id);
-          });
-          if (ids.length === 0) return false;
-          deleteWords(ids);
-          event.preventDefault();
-          return true;
-        }
-        return false;
-      },
     },
   });
 
-  // Global ⌘F handler (in case focus isn't in the editor yet).
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        setShowFind((v) => !v);
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+  const handleTranscriptClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    const wordEl = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-word-id]");
+    if (!wordEl || !containerRef.current?.contains(wordEl)) return;
+    const start = Number(wordEl.dataset.start);
+    if (!Number.isFinite(start)) return;
+    window.dispatchEvent(new CustomEvent("scribe:seek-source", { detail: { start } }));
+    usePlayerStore.getState().setPlaying(true);
   }, []);
 
   // Re-render the TipTap document whenever the EDL changes.
@@ -251,21 +230,35 @@ export function TranscriptEditor() {
     };
   }, [paragraphs, editor]);
 
-  // Sync word selection → store
+  // Sync native text selection → selected word IDs. The editor is intentionally
+  // read-only, so selection tracking has to come from the DOM rather than
+  // ProseMirror transactions.
   useEffect(() => {
-    if (!editor) return;
-    const handler = () => {
-      const { from, to } = editor.state.selection;
-      const ids: string[] = [];
-      editor.state.doc.nodesBetween(from, to, (node) => {
-        if (node.type.name === "word") ids.push(node.attrs.wordId as string);
-        return true;
-      });
-      setSelectedWordIds(ids);
-    };
-    editor.on("selectionUpdate", handler);
-    return () => { editor.off("selectionUpdate", handler); };
-  }, [editor, setSelectedWordIds]);
+    function onSelectionChange() {
+      const root = containerRef.current;
+      const selection = window.getSelection();
+      if (!root || !selection) return;
+      if (!nodeIsInside(root, selection.anchorNode) && !nodeIsInside(root, selection.focusNode)) {
+        return;
+      }
+      setSelectedWordIds(getSelectedWordIds(root));
+    }
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [setSelectedWordIds]);
+
+  // Highlight timeline/keyboard selections in the transcript too.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    root.querySelectorAll<HTMLElement>(".word.is-selected").forEach((el) =>
+      el.classList.remove("is-selected"),
+    );
+    selectedWordIds.forEach((id) => {
+      const el = root.querySelector<HTMLElement>(`[data-word-id="${CSS.escape(id)}"]`);
+      if (el) el.classList.add("is-selected");
+    });
+  }, [selectedWordIds, paragraphs]);
 
   // Highlight the currently playing word.
   const currentTime = usePlayerStore((s) => s.currentTime);
@@ -330,7 +323,7 @@ export function TranscriptEditor() {
   }
 
   return (
-    <div ref={containerRef} className="flex h-full w-full flex-col">
+    <div ref={containerRef} className="flex h-full w-full flex-col" onClick={handleTranscriptClick}>
       {/*
        * Transcript toolbar — one-click filler removal and restore. Matches the
        * design's "Remove fillers (17)" / "Restore" buttons that live above the
@@ -362,20 +355,7 @@ export function TranscriptEditor() {
             Restore
           </Button>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={() => setShowFind((v) => !v)}
-            title="Find & Replace (⌘F)"
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
-
-      {showFind && <FindReplacePanel onClose={() => setShowFind(false)} />}
 
       <div className="transcript-scroll relative flex-1">
         <div ref={editorRef} className="relative">

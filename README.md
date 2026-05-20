@@ -8,7 +8,7 @@ Delete words, the corresponding video disappears. Reorder paragraphs, the video
 reorders. Everything runs 100% locally using your Mac's CPU/GPU/Neural Engine
 — no cloud, no telemetry, no API keys required.
 
-Scribe 1.0.0 is MVP ready for local-first transcript editing, timeline preview,
+Scribe 1.1.0 is MVP ready for local-first transcript editing, timeline preview,
 and MP4 export on Apple Silicon Macs. See [`scribe-spec.md`](scribe-spec.md) for
 the full design document.
 
@@ -19,8 +19,8 @@ the full design document.
 | 0 | Project scaffolding | ✅ complete |
 | 1 | Media import + FFprobe | ✅ MVP ready |
 | 2 | Whisper transcription | ✅ MVP ready with local sidecar |
-| 3 | Transcript editor UI | ✅ TipTap + Word node implemented |
-| 4 | Edit operations | ✅ EDL helpers + delete pipeline |
+| 3 | Transcript editor UI | ✅ read-only selectable transcript surface |
+| 4 | Edit operations | ✅ EDL helpers + delete pipeline + guarded undo |
 | 5 | Project save/load | ✅ atomic .scribe bundle round-trip |
 | 6 | Export | ✅ MVP ready |
 | 7 | Polish (icons, notarisation, auto-update) | ⏳ post-1.0 |
