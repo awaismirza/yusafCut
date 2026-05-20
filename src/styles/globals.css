@@ -28,15 +28,15 @@
      working but the look matches the design.                             */
   [data-theme="dark"],
   .dark {
-    --background: 30 4% 12%;           /* warm near-black window bg */
-    --foreground: 30 5% 96%;           /* primary text */
-    --primary: 188 60% 55%;            /* teal/cyan accent */
+    --background: 30 4% 12%; /* warm near-black window bg */
+    --foreground: 30 5% 96%; /* primary text */
+    --primary: 188 60% 55%; /* teal/cyan accent */
     --primary-foreground: 195 30% 12%;
-    --secondary: 30 4% 16%;            /* panels */
+    --secondary: 30 4% 16%; /* panels */
     --secondary-foreground: 30 5% 96%;
     --muted: 30 4% 16%;
-    --muted-foreground: 30 4% 58%;     /* tertiary */
-    --accent: 30 4% 21%;               /* hover bg */
+    --muted-foreground: 30 4% 58%; /* tertiary */
+    --accent: 30 4% 21%; /* hover bg */
     --accent-foreground: 30 5% 96%;
     --destructive: 18 70% 50%;
     --destructive-foreground: 0 0% 98%;
@@ -45,12 +45,12 @@
     --ring: 188 60% 55%;
 
     /* Scribe semantic tokens (not part of shadcn's set) */
-    --filler: 42 70% 65%;              /* amber — filler word highlight */
+    --filler: 42 70% 65%; /* amber — filler word highlight */
     --filler-strong: 42 70% 58%;
-    --delete: 18 70% 55%;              /* red — deleted regions */
-    --speaker-a: 200 60% 68%;          /* light teal */
-    --speaker-b: 18 65% 68%;           /* warm coral */
-    --pulse: 145 55% 56%;              /* green privacy indicator */
+    --delete: 18 70% 55%; /* red — deleted regions */
+    --speaker-a: 200 60% 68%; /* light teal */
+    --speaker-b: 18 65% 68%; /* warm coral */
+    --pulse: 145 55% 56%; /* green privacy indicator */
   }
 
   :root {
@@ -63,10 +63,14 @@
     --pulse: 145 60% 40%;
   }
 
-  * { @apply border-border; }
+  * {
+    @apply border-border;
+  }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
   }
 }
 
@@ -107,7 +111,10 @@
   gap: 10px;
   min-width: 0;
   color: hsl(var(--foreground) / 0.9);
-  font: 700 13px/1 ui-sans-serif, system-ui, sans-serif;
+  font:
+    700 13px/1 ui-sans-serif,
+    system-ui,
+    sans-serif;
 }
 .toolbar-title span:first-child {
   overflow: hidden;
@@ -127,7 +134,10 @@
 }
 .toolbar-duration {
   color: hsl(var(--muted-foreground));
-  font: 600 11px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    600 11px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
   font-variant-numeric: tabular-nums;
 }
 .editor-toolbar-bottom {
@@ -168,22 +178,25 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   LEFT TOOLBOX
+   TIMELINE TOOLBOX
    ════════════════════════════════════════════════════════════════════════ */
+.timeline-dock {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+}
 .editor-toolbox {
-  position: fixed;
-  left: 12px;
-  top: 92px;
-  z-index: 30;
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(30 5% 8% / 0.92);
-  box-shadow: 0 10px 30px hsl(0 0% 0% / 0.28);
-  backdrop-filter: blur(10px);
+  align-items: center;
+  gap: 5px;
+  width: 46px;
+  padding: 7px 5px;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(30 5% 8%);
+  box-shadow: 1px 0 0 hsl(0 0% 100% / 0.03) inset;
 }
 .toolbox-button {
   position: relative;
@@ -205,11 +218,20 @@
   position: absolute;
   bottom: 2px;
   right: 4px;
-  font: 700 8px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    700 8px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
   color: hsl(var(--muted-foreground));
 }
 .toolbox-button.is-active span {
   color: hsl(var(--primary));
+}
+.toolbox-divider {
+  width: 22px;
+  height: 1px;
+  margin: 2px 0;
+  background: hsl(var(--border));
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -225,8 +247,12 @@
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
 }
-.transcript-scroll::-webkit-scrollbar { width: 6px; }
-.transcript-scroll::-webkit-scrollbar-track { background: transparent; }
+.transcript-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.transcript-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
 .transcript-scroll::-webkit-scrollbar-thumb {
   background: hsl(var(--border));
   border-radius: 3px;
@@ -240,7 +266,11 @@
   margin: 0 auto;
   font-size: 16.5px;
   line-height: 1.85;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
   outline: none;
 }
 
@@ -257,7 +287,9 @@
   border-radius: 3px;
   padding: 1px 2px;
   margin: 0 -1px;
-  transition: background-color 80ms ease, color 80ms ease;
+  transition:
+    background-color 80ms ease,
+    color 80ms ease;
   display: inline;
 }
 
@@ -277,7 +309,7 @@
 .transcript-editor .word.is-filler {
   color: hsl(var(--filler));
   background-color: hsl(var(--filler) / 0.16);
-  box-shadow: inset 0 0 0 1px hsl(var(--filler) / 0.40);
+  box-shadow: inset 0 0 0 1px hsl(var(--filler) / 0.4);
   border-radius: 3px;
 }
 .transcript-editor .word.is-filler:hover {
@@ -291,7 +323,10 @@
   border-radius: 50%;
   background: hsl(var(--delete));
   color: hsl(30 5% 10%);
-  font: 700 9px/14px ui-sans-serif, system-ui, sans-serif;
+  font:
+    700 9px/14px ui-sans-serif,
+    system-ui,
+    sans-serif;
   text-align: center;
   vertical-align: 1px;
   cursor: pointer;
@@ -328,7 +363,9 @@
 }
 
 /* ProseMirror focus ring */
-.ProseMirror:focus { outline: none; }
+.ProseMirror:focus {
+  outline: none;
+}
 
 /* ── Paragraph timestamp chips (floating column) ─────────────────────────
    These are React-rendered absolutely-positioned buttons that live in their
@@ -339,33 +376,40 @@
   left: 1.25rem;
   display: inline-flex;
   align-items: center;
-  height: 1.6em;                  /* roughly matches line-height of first line */
+  height: 1.6em; /* roughly matches line-height of first line */
   margin-top: 0.15em;
   padding: 0 6px;
   border-radius: 4px;
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-family: ui-monospace, "Cascadia Code", monospace;
   color: hsl(var(--muted-foreground));
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-  transition: color 80ms ease, background-color 80ms ease, border-color 80ms ease;
+  transition:
+    color 80ms ease,
+    background-color 80ms ease,
+    border-color 80ms ease;
 }
 .paragraph-ts-chip:hover {
   color: hsl(var(--foreground));
   background: hsl(var(--accent));
   border-color: hsl(var(--border));
 }
-[data-theme="dark"] .paragraph-ts-chip { opacity: 0.55; }
-[data-theme="dark"] .paragraph-ts-chip:hover { opacity: 1; }
+[data-theme="dark"] .paragraph-ts-chip {
+  opacity: 0.55;
+}
+[data-theme="dark"] .paragraph-ts-chip:hover {
+  opacity: 1;
+}
 
 /* ── Find / replace match highlight ─────────────────────────────────────── */
 .transcript-editor .word.is-match {
-  background-color: hsl(48 95% 55% / 0.30);
+  background-color: hsl(48 95% 55% / 0.3);
   border-radius: 3px;
 }
 .transcript-editor .word.is-current-match {
@@ -391,7 +435,7 @@
   width: 100%;
   height: 4px;
   border-radius: 9999px;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
   cursor: pointer;
   outline: none;
 }
@@ -405,13 +449,17 @@
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.5);
-  transition: transform 100ms ease, box-shadow 100ms ease;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 100ms ease,
+    box-shadow 100ms ease;
 }
 .scrubber:hover::-webkit-slider-thumb,
 .scrubber:active::-webkit-slider-thumb {
   transform: scale(1.25);
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.4), 0 0 8px rgba(255,255,255,0.25);
+  box-shadow:
+    0 0 0 3px rgba(0, 0, 0, 0.4),
+    0 0 8px rgba(255, 255, 255, 0.25);
 }
 
 /* Track */
@@ -428,12 +476,31 @@
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.5);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
 }
 .scrubber::-moz-range-track {
   height: 4px;
   border-radius: 9999px;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Indeterminate progress used when backend progress events are unavailable or
+   too sparse to report honestly. */
+.progress-indeterminate .progress-indicator-indeterminate {
+  width: 38%;
+  transform: translateX(-120%);
+  animation: progress-slide 1.05s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  55% {
+    transform: translateX(135%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -451,23 +518,40 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
   background: transparent;
   border: 0;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
 }
-.paragraph-speaker-chip .name { font-weight: 600; }
+.paragraph-speaker-chip .name {
+  font-weight: 600;
+}
 .paragraph-speaker-chip .ts {
-  font: 500 10.5px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    500 10.5px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
   color: hsl(var(--muted-foreground));
   font-variant-numeric: tabular-nums;
 }
-.paragraph-speaker-chip[data-speaker="A"] .name { color: hsl(var(--speaker-a)); }
-.paragraph-speaker-chip[data-speaker="B"] .name { color: hsl(var(--speaker-b)); }
-.paragraph-speaker-chip[data-speaker="default"] .name { color: hsl(var(--muted-foreground)); }
-.paragraph-speaker-chip:hover .ts { color: hsl(var(--foreground)); }
+.paragraph-speaker-chip[data-speaker="A"] .name {
+  color: hsl(var(--speaker-a));
+}
+.paragraph-speaker-chip[data-speaker="B"] .name {
+  color: hsl(var(--speaker-b));
+}
+.paragraph-speaker-chip[data-speaker="default"] .name {
+  color: hsl(var(--muted-foreground));
+}
+.paragraph-speaker-chip:hover .ts {
+  color: hsl(var(--foreground));
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    STATUS BAR — bottom of the window (model, counts, timecode)
@@ -480,22 +564,34 @@
   gap: 14px;
   background: hsl(var(--background));
   border-top: 1px solid hsl(var(--border));
-  font: 500 11px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    500 11px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
   color: hsl(var(--muted-foreground));
   flex-shrink: 0;
   white-space: nowrap;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
-.scribe-statusbar > * { flex-shrink: 0; }
-.scribe-statusbar .sep { opacity: 0.5; }
-.scribe-statusbar .spacer { flex: 1; }
+.scribe-statusbar > * {
+  flex-shrink: 0;
+}
+.scribe-statusbar .sep {
+  opacity: 0.5;
+}
+.scribe-statusbar .spacer {
+  flex: 1;
+}
 .scribe-statusbar .chip {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: hsl(var(--foreground));
 }
 .scribe-statusbar .chip .pulse {
-  width: 5px; height: 5px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: hsl(var(--pulse));
   box-shadow: 0 0 5px hsl(var(--pulse) / 0.7);
@@ -515,20 +611,29 @@
   font-size: 12px;
 }
 .transcript-toolbar .label {
-  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  font:
+    600 11px/1 ui-sans-serif,
+    system-ui,
+    sans-serif;
   color: hsl(var(--muted-foreground));
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 .transcript-toolbar .count-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: 9px;
   background: hsl(var(--filler) / 0.16);
   color: hsl(var(--filler));
-  font: 600 10.5px/1 ui-monospace, monospace;
+  font:
+    600 10.5px/1 ui-monospace,
+    monospace;
   margin-left: 6px;
-  border: 1px solid hsl(var(--filler) / 0.40);
+  border: 1px solid hsl(var(--filler) / 0.4);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -548,7 +653,10 @@
   gap: 16px;
   padding: 0 16px;
   border-bottom: 1px solid hsl(var(--border));
-  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  font:
+    600 11px/1 ui-sans-serif,
+    system-ui,
+    sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -571,16 +679,25 @@
   border-radius: 2px;
   display: inline-block;
 }
-.legend-audio { background: hsl(var(--muted-foreground)); }
-.legend-filler { background: hsl(var(--filler)); }
-.legend-selected { background: hsl(var(--primary)); }
+.legend-audio {
+  background: hsl(var(--muted-foreground));
+}
+.legend-filler {
+  background: hsl(var(--filler));
+}
+.legend-selected {
+  background: hsl(var(--primary));
+}
 .timeline-help {
   margin-left: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: hsl(var(--muted-foreground) / 0.72);
-  font: 500 11px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    500 11px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
   text-transform: none;
   letter-spacing: 0;
 }
@@ -602,7 +719,10 @@
   top: 8px;
   transform: translateX(-50%);
   color: hsl(var(--muted-foreground) / 0.65);
-  font: 500 10px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    500 10px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
   font-variant-numeric: tabular-nums;
 }
 .timeline-ticks span::before {
@@ -631,7 +751,9 @@
 }
 .timeline-bar.is-selected {
   background: hsl(var(--primary));
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.55), 0 0 12px hsl(var(--primary) / 0.18);
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.55),
+    0 0 12px hsl(var(--primary) / 0.18);
 }
 .timeline-selection {
   position: absolute;
@@ -678,7 +800,10 @@
   border-radius: 4px;
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
-  font: 800 10px/1 ui-monospace, 'Cascadia Code', monospace;
+  font:
+    800 10px/1 ui-monospace,
+    "Cascadia Code",
+    monospace;
 }
 .timeline-marker.is-out {
   border-left-color: hsl(var(--filler));

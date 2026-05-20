@@ -22,15 +22,7 @@ import { useProjectStore } from "@/stores/projectStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
-import {
-  AlertTriangle,
-  Pause,
-  Play,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AlertTriangle, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { formatTimecode } from "@/lib/timecode";
 
 function firstMediaPath(project: Project): string | null {
@@ -93,7 +85,9 @@ export function VideoPreview() {
   const displayedProgress = scrubbing
     ? scrubValue
     : displayDurationForProgress(outputDuration, nativeDuration) > 0
-      ? Math.round((currentTime / displayDurationForProgress(outputDuration, nativeDuration)) * 1000)
+      ? Math.round(
+          (currentTime / displayDurationForProgress(outputDuration, nativeDuration)) * 1000,
+        )
       : 0;
 
   // Tracks the latest user intent so we can ignore stale Promise rejections
@@ -377,7 +371,9 @@ export function VideoPreview() {
     setScrubValue(Number(e.target.value));
   };
 
-  const handleScrubEnd = (e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>) => {
+  const handleScrubEnd = (
+    e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>,
+  ) => {
     const fraction = Number((e.currentTarget as HTMLInputElement).value) / 1000;
     // Use source duration when there are no EDL words yet
     const dur = hasWords(project) ? outputDuration : (videoRef.current?.duration ?? 0);
@@ -397,6 +393,7 @@ export function VideoPreview() {
 
   const handlePlayPause = () => {
     if (playing) {
+      setRate(1);
       pauseVideo();
       return;
     }
@@ -468,7 +465,6 @@ export function VideoPreview() {
 
       {/* Controls */}
       <div className="flex flex-col gap-2 border-t border-white/[0.08] bg-zinc-950 px-3 pb-3 pt-2.5">
-
         {/* Scrubber */}
         <div className="relative flex items-center">
           {/* Filled track */}
@@ -510,9 +506,11 @@ export function VideoPreview() {
             onClick={handlePlayPause}
             title={playing ? "Pause (Space)" : "Play (Space)"}
           >
-            {playing
-              ? <Pause className="h-4 w-4 fill-current stroke-none" />
-              : <Play className="h-4 w-4 fill-current stroke-none" />}
+            {playing ? (
+              <Pause className="h-4 w-4 fill-current stroke-none" />
+            ) : (
+              <Play className="h-4 w-4 fill-current stroke-none" />
+            )}
           </Button>
 
           <Button
@@ -548,9 +546,7 @@ export function VideoPreview() {
               onClick={toggleMuted}
               title={muted ? "Unmute" : "Mute"}
             >
-              {muted
-                ? <VolumeX className="h-3.5 w-3.5" />
-                : <Volume2 className="h-3.5 w-3.5" />}
+              {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
             </Button>
           </div>
         </div>

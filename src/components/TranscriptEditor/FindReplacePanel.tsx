@@ -9,14 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/stores/projectStore";
 import { useUIStore } from "@/stores/uiStore";
-import {
-  ChevronDown,
-  ChevronUp,
-  Eraser,
-  Replace,
-  Search,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Eraser, Replace, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Default list of "filler" words a transcript editor typically wants removed. */
@@ -51,6 +44,8 @@ interface FindReplacePanelProps {
 export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
   const replaceText = useProjectStore((s) => s.replaceText);
   const deleteWordsByText = useProjectStore((s) => s.deleteWordsByText);
+  const paddingMs = useProjectStore((s) => s.project.settings.paddingMs);
+  const updatePaddingMs = useProjectStore((s) => s.updatePaddingMs);
   const pushToast = useUIStore((s) => s.pushToast);
 
   const [find, setFind] = useState("");
@@ -150,7 +145,11 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
     if (n === 0) {
       pushToast({ title: "No matches found" });
     } else {
-      pushToast({ title: `Removed ${n} ${n === 1 ? "word" : "words"}` });
+      pushToast({
+        title: `Removed ${n} ${n === 1 ? "word" : "words"}`,
+        description:
+          paddingMs > 0 ? `Kept ${(paddingMs / 1000).toFixed(1)}s around each cut` : undefined,
+      });
     }
   }
 
@@ -161,7 +160,10 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
     } else {
       pushToast({
         title: `Removed ${n} filler ${n === 1 ? "word" : "words"}`,
-        description: "Press ⌘Z to undo",
+        description:
+          paddingMs > 0
+            ? `Kept ${(paddingMs / 1000).toFixed(1)}s around each cut`
+            : "Press ⌘Z to undo",
       });
     }
     setShowFillerMenu(false);
@@ -222,7 +224,13 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </Button>
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} title="Close (Esc)">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={onClose}
+          title="Close (Esc)"
+        >
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -330,13 +338,32 @@ export function FindReplacePanel({ onClose }: FindReplacePanelProps) {
           />
           Aa
         </label>
-        <label className="flex select-none items-center gap-1 text-xs text-muted-foreground" title="Whole word">
+        <label
+          className="flex select-none items-center gap-1 text-xs text-muted-foreground"
+          title="Whole word"
+        >
           <input
             type="checkbox"
             checked={wholeWord}
             onChange={(e) => setWholeWord(e.target.checked)}
           />
           W
+        </label>
+        <label
+          className="ml-auto flex min-w-[240px] items-center gap-2 text-xs text-muted-foreground"
+          title="Audio kept around deleted words"
+        >
+          Gap
+          <input
+            className="min-w-0 flex-1"
+            type="range"
+            min={0}
+            max={10_000}
+            step={250}
+            value={paddingMs}
+            onChange={(e) => updatePaddingMs(Number(e.target.value))}
+          />
+          <span className="w-12 text-right tabular-nums">{(paddingMs / 1000).toFixed(1)}s</span>
         </label>
       </div>
     </div>

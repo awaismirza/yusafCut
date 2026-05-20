@@ -9,7 +9,7 @@ export type Toast = {
   variant?: "default" | "destructive";
 };
 
-export type EditorTool = "select" | "razor" | "slip" | "slide";
+export type EditorTool = "select";
 
 interface UIState {
   toasts: Toast[];

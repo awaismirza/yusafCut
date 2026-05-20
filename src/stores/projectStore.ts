@@ -33,12 +33,17 @@ interface ProjectState {
   addMediaWithTranscript: (media: SourceMedia, words: Word[]) => void;
   deleteWords: (ids: Iterable<string>) => void;
   deleteOutputRange: (markIn: number, markOut: number) => number;
+  updatePaddingMs: (paddingMs: number) => void;
   /** Delete every word whose text (case-insensitive, punctuation-stripped)
    *  matches one of the given tokens. Returns the count of words removed. */
   deleteWordsByText: (tokens: ReadonlySet<string>) => number;
   /** Replace the text of every word whose token equals `find` (case-insensitive)
    *  with `replace`. Returns the count of replacements made. */
-  replaceText: (find: string, replace: string, opts?: { caseSensitive?: boolean; wholeWord?: boolean }) => number;
+  replaceText: (
+    find: string,
+    replace: string,
+    opts?: { caseSensitive?: boolean; wholeWord?: boolean },
+  ) => number;
   markSaved: (path: string) => void;
   closeProject: () => void;
 }
@@ -88,6 +93,19 @@ export const useProjectStore = create<ProjectState>()(
         });
         return ids.length;
       },
+
+      updatePaddingMs: (paddingMs) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            settings: {
+              ...s.project.settings,
+              paddingMs: Math.max(0, Math.min(10_000, Math.round(paddingMs))),
+            },
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
 
       deleteWordsByText: (tokens) => {
         let removed = 0;

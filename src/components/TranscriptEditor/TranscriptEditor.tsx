@@ -28,7 +28,8 @@ import { usePlayerStore } from "@/stores/playerStore";
 import { computeTimeline, type Word } from "@/lib/edl";
 import { formatTimecode } from "@/lib/timecode";
 import { Button } from "@/components/ui/button";
-import { Eraser, RotateCcw } from "lucide-react";
+import { Eraser, RotateCcw, Search } from "lucide-react";
+import { FindReplacePanel } from "./FindReplacePanel";
 
 /** Friendly names for speaker IDs found in the transcript. */
 const SPEAKER_NAMES: Record<string, string> = {
@@ -107,7 +108,17 @@ function nodeIsInside(root: HTMLElement, node: Node | null): boolean {
   return !!el && root.contains(el);
 }
 
-export function TranscriptEditor() {
+interface TranscriptEditorProps {
+  findOpen?: boolean;
+  onFindOpen?: () => void;
+  onFindClose?: () => void;
+}
+
+export function TranscriptEditor({
+  findOpen = false,
+  onFindOpen,
+  onFindClose,
+}: TranscriptEditorProps) {
   const project = useProjectStore((s) => s.project);
   const deleteWordsByText = useProjectStore((s) => s.deleteWordsByText);
   const setSelectedWordIds = usePlayerStore((s) => s.setSelectedWordIds);
@@ -122,17 +133,11 @@ export function TranscriptEditor() {
   const [paragraphTops, setParagraphTops] = useState<number[]>([]);
 
   // Flatten all words across segments in output order.
-  const words = useMemo(
-    () => project.segments.flatMap((s) => s.words),
-    [project.segments],
-  );
+  const words = useMemo(() => project.segments.flatMap((s) => s.words), [project.segments]);
   const paragraphs = useMemo(() => paragraphize(words), [words]);
 
   // Per-paragraph speaker (first word in the paragraph wins).
-  const paragraphSpeakers = useMemo(
-    () => paragraphs.map((p) => p.words[0]?.speaker),
-    [paragraphs],
-  );
+  const paragraphSpeakers = useMemo(() => paragraphs.map((p) => p.words[0]?.speaker), [paragraphs]);
 
   // Count fillers currently visible in the transcript so the bulk-remove
   // button can show "Remove fillers (17)".
@@ -251,9 +256,9 @@ export function TranscriptEditor() {
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
-    root.querySelectorAll<HTMLElement>(".word.is-selected").forEach((el) =>
-      el.classList.remove("is-selected"),
-    );
+    root
+      .querySelectorAll<HTMLElement>(".word.is-selected")
+      .forEach((el) => el.classList.remove("is-selected"));
     selectedWordIds.forEach((id) => {
       const el = root.querySelector<HTMLElement>(`[data-word-id="${CSS.escape(id)}"]`);
       if (el) el.classList.add("is-selected");
@@ -282,13 +287,11 @@ export function TranscriptEditor() {
         break;
       }
     }
-    root.querySelectorAll<HTMLElement>(".word.is-playing").forEach((el) =>
-      el.classList.remove("is-playing"),
-    );
+    root
+      .querySelectorAll<HTMLElement>(".word.is-playing")
+      .forEach((el) => el.classList.remove("is-playing"));
     if (activeWordId) {
-      const el = root.querySelector<HTMLElement>(
-        `[data-word-id="${CSS.escape(activeWordId)}"]`,
-      );
+      const el = root.querySelector<HTMLElement>(`[data-word-id="${CSS.escape(activeWordId)}"]`);
       if (el) {
         el.classList.add("is-playing");
         const rect = el.getBoundingClientRect();
@@ -302,9 +305,7 @@ export function TranscriptEditor() {
 
   // Click on a paragraph timestamp → seek to start of that paragraph.
   const seekToParagraph = useCallback((startTime: number) => {
-    window.dispatchEvent(
-      new CustomEvent("scribe:seek-source", { detail: { start: startTime } }),
-    );
+    window.dispatchEvent(new CustomEvent("scribe:seek-source", { detail: { start: startTime } }));
     usePlayerStore.getState().setPlaying(true);
   }, []);
 
@@ -324,6 +325,7 @@ export function TranscriptEditor() {
 
   return (
     <div ref={containerRef} className="flex h-full w-full flex-col" onClick={handleTranscriptClick}>
+      {findOpen && <FindReplacePanel onClose={() => onFindClose?.()} />}
       {/*
        * Transcript toolbar — one-click filler removal and restore. Matches the
        * design's "Remove fillers (17)" / "Restore" buttons that live above the
@@ -331,6 +333,16 @@ export function TranscriptEditor() {
        */}
       <div className="transcript-toolbar">
         <span className="label">Transcript</span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1.5 text-xs"
+          onClick={() => (findOpen ? onFindClose?.() : onFindOpen?.())}
+          title={findOpen ? "Close transcript search" : "Open transcript search"}
+        >
+          <Search className="h-3.5 w-3.5" />
+          {findOpen ? "Hide search" : "Search"}
+        </Button>
         <Button
           size="sm"
           variant="outline"

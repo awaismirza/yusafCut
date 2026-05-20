@@ -40,6 +40,7 @@ export function Waveform() {
   const selectedWordIds = usePlayerStore((s) => s.selectedWordIds);
   const timelineMarkIn = usePlayerStore((s) => s.timelineMarkIn);
   const timelineMarkOut = usePlayerStore((s) => s.timelineMarkOut);
+  const timelineZoom = usePlayerStore((s) => s.timelineZoom);
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime);
   const setSelectedWordIds = usePlayerStore((s) => s.setSelectedWordIds);
   const setTimelineRange = usePlayerStore((s) => s.setTimelineRange);
@@ -48,46 +49,69 @@ export function Waveform() {
 
   const firstMedia = Object.values(project.media)[0];
   const duration = totalDuration(project);
+  const visibleDuration = duration > 0 ? duration / timelineZoom : 0;
+  const windowStart = Math.max(
+    0,
+    Math.min(Math.max(0, duration - visibleDuration), currentTime - visibleDuration / 2),
+  );
+  const windowEnd = windowStart + visibleDuration;
 
   const { bars, ticks } = useMemo(() => {
     const timeline = computeTimeline(project);
     const outDuration = Math.max(totalDuration(project), 0.001);
+    const zoom = Math.max(1, timelineZoom);
+    const viewportDuration = outDuration / zoom;
+    const viewportStart = Math.max(
+      0,
+      Math.min(Math.max(0, outDuration - viewportDuration), currentTime - viewportDuration / 2),
+    );
+    const viewportEnd = viewportStart + viewportDuration;
     let wordIndex = 0;
     const nextBars = timeline.flatMap((entry) => {
       const segment = project.segments.find((s) => s.id === entry.segmentId);
       if (!segment) return [];
-      return segment.words.map((word) => {
-        const outputStart = entry.outputStart + Math.max(0, word.start - entry.sourceIn);
-        const outputEnd = entry.outputStart + Math.max(0, word.end - entry.sourceIn);
-        const width = Math.max(0.2, ((outputEnd - outputStart) / outDuration) * 100);
-        const left = (outputStart / outDuration) * 100;
-        const idx = wordIndex++;
-        return {
-          id: word.id,
-          left,
-          width,
-          height: amplitude(word, idx),
-          filler: isFiller(word),
-          selected: selectedWordIds.has(word.id),
-          label: word.text,
-        };
-      });
+      return segment.words
+        .map((word) => {
+          const outputStart = entry.outputStart + Math.max(0, word.start - entry.sourceIn);
+          const outputEnd = entry.outputStart + Math.max(0, word.end - entry.sourceIn);
+          if (outputEnd < viewportStart || outputStart > viewportEnd) return null;
+          const clippedStart = Math.max(outputStart, viewportStart);
+          const clippedEnd = Math.min(outputEnd, viewportEnd);
+          const width = Math.max(0.2, ((clippedEnd - clippedStart) / viewportDuration) * 100);
+          const left = ((clippedStart - viewportStart) / viewportDuration) * 100;
+          const idx = wordIndex++;
+          return {
+            id: word.id,
+            left,
+            width,
+            height: amplitude(word, idx),
+            filler: isFiller(word),
+            selected: selectedWordIds.has(word.id),
+            label: word.text,
+          };
+        })
+        .filter((bar): bar is NonNullable<typeof bar> => bar !== null);
     });
 
-    const tickStep = outDuration > 180 ? 30 : outDuration > 60 ? 10 : 5;
+    const tickStep =
+      viewportDuration > 180 ? 30 : viewportDuration > 60 ? 10 : viewportDuration > 20 ? 5 : 1;
     const nextTicks: { left: number; label: string }[] = [];
-    for (let t = 0; t <= outDuration; t += tickStep) {
-      nextTicks.push({ left: (t / outDuration) * 100, label: formatTimecode(t, { ms: false }) });
+    const firstTick = Math.ceil(viewportStart / tickStep) * tickStep;
+    for (let t = firstTick; t <= viewportEnd + 1e-6; t += tickStep) {
+      nextTicks.push({
+        left: ((t - viewportStart) / viewportDuration) * 100,
+        label: formatTimecode(t, { ms: false }),
+      });
     }
     return { bars: nextBars, ticks: nextTicks };
-  }, [project, selectedWordIds]);
+  }, [currentTime, project, selectedWordIds, timelineZoom]);
 
   function outputTimeFromPointer(e: React.MouseEvent<HTMLDivElement>) {
     const rail = railRef.current;
     if (!rail) return null;
     const rect = rail.getBoundingClientRect();
     const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    return fraction * duration;
+    return windowStart + fraction * visibleDuration;
   }
 
   function seekToOutputTime(outputTime: number) {
@@ -141,7 +165,7 @@ export function Waveform() {
     );
   }
 
-  if (duration <= 0 || bars.length === 0) {
+  if (duration <= 0) {
     return (
       <div className="timeline-panel flex items-center justify-center text-xs text-muted-foreground">
         Transcribe to build an editable output timeline
@@ -149,15 +173,30 @@ export function Waveform() {
     );
   }
 
-  const playheadLeft = Math.max(0, Math.min(100, (currentTime / duration) * 100));
+  const playheadLeft = Math.max(
+    0,
+    Math.min(100, ((currentTime - windowStart) / visibleDuration) * 100),
+  );
   const hasTimelineRange = timelineMarkIn !== null && timelineMarkOut !== null;
-  const markInLeft = timelineMarkIn !== null ? (timelineMarkIn / duration) * 100 : null;
-  const markOutLeft = timelineMarkOut !== null ? (timelineMarkOut / duration) * 100 : null;
+  const markInLeft =
+    timelineMarkIn !== null && timelineMarkIn >= windowStart && timelineMarkIn <= windowEnd
+      ? ((timelineMarkIn - windowStart) / visibleDuration) * 100
+      : null;
+  const markOutLeft =
+    timelineMarkOut !== null && timelineMarkOut >= windowStart && timelineMarkOut <= windowEnd
+      ? ((timelineMarkOut - windowStart) / visibleDuration) * 100
+      : null;
+  const selectionVisibleStart = hasTimelineRange
+    ? Math.max(windowStart, Math.min(timelineMarkIn!, timelineMarkOut!))
+    : 0;
+  const selectionVisibleEnd = hasTimelineRange
+    ? Math.min(windowEnd, Math.max(timelineMarkIn!, timelineMarkOut!))
+    : 0;
   const selectionStart = hasTimelineRange
-    ? (Math.min(timelineMarkIn!, timelineMarkOut!) / duration) * 100
+    ? ((selectionVisibleStart - windowStart) / visibleDuration) * 100
     : 0;
   const selectionWidth = hasTimelineRange
-    ? (Math.abs(timelineMarkOut! - timelineMarkIn!) / duration) * 100
+    ? ((selectionVisibleEnd - selectionVisibleStart) / visibleDuration) * 100
     : 0;
 
   return (
@@ -165,11 +204,19 @@ export function Waveform() {
       <div className="timeline-header">
         <div className="timeline-title">
           Timeline
-          <span><i className="legend-audio" /> kept audio</span>
-          <span><i className="legend-filler" /> filler</span>
-          <span><i className="legend-selected" /> selected</span>
+          <span>
+            <i className="legend-audio" /> kept audio
+          </span>
+          <span>
+            <i className="legend-filler" /> filler
+          </span>
+          <span>
+            <i className="legend-selected" /> selected
+          </span>
         </div>
-        <div className="timeline-help">drag selects · I/O mark range · Cmd+Delete ripple deletes</div>
+        <div className="timeline-help">
+          drag selects · I/O mark range · zoom {timelineZoom.toFixed(1)}x
+        </div>
       </div>
 
       <div
