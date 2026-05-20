@@ -151,6 +151,8 @@ export function Waveform() {
 
   const playheadLeft = Math.max(0, Math.min(100, (currentTime / duration) * 100));
   const hasTimelineRange = timelineMarkIn !== null && timelineMarkOut !== null;
+  const markInLeft = timelineMarkIn !== null ? (timelineMarkIn / duration) * 100 : null;
+  const markOutLeft = timelineMarkOut !== null ? (timelineMarkOut / duration) * 100 : null;
   const selectionStart = hasTimelineRange
     ? (Math.min(timelineMarkIn!, timelineMarkOut!) / duration) * 100
     : 0;
@@ -167,7 +169,7 @@ export function Waveform() {
           <span><i className="legend-filler" /> filler</span>
           <span><i className="legend-selected" /> selected</span>
         </div>
-        <div className="timeline-help">shift-drag selects words · click timeline to seek</div>
+        <div className="timeline-help">drag selects · I/O mark range · Cmd+Delete ripple deletes</div>
       </div>
 
       <div
@@ -207,8 +209,18 @@ export function Waveform() {
             className="timeline-selection"
             style={{ left: `${selectionStart}%`, width: `${selectionWidth}%` }}
           >
-            <span className="mark-in" />
-            <span className="mark-out" />
+            <span />
+            <span />
+          </div>
+        )}
+        {markInLeft !== null && (
+          <div className="timeline-marker is-in" style={{ left: `${markInLeft}%` }}>
+            <span>I</span>
+          </div>
+        )}
+        {markOutLeft !== null && (
+          <div className="timeline-marker is-out" style={{ left: `${markOutLeft}%` }}>
+            <span>O</span>
           </div>
         )}
         <div className="timeline-playhead" style={{ left: `${playheadLeft}%` }}>

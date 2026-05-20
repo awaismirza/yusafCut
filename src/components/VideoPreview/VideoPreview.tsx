@@ -23,6 +23,7 @@ import { usePlayerStore } from "@/stores/playerStore";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import {
+  AlertTriangle,
   Pause,
   Play,
   SkipBack,
@@ -45,6 +46,25 @@ function hasWords(project: Project) {
   return project.segments.some((s) => s.words.length > 0);
 }
 
+function displayDurationForProgress(outputDuration: number, nativeDuration: number) {
+  return outputDuration > 0 ? outputDuration : nativeDuration;
+}
+
+function videoErrorMessage(error: MediaError) {
+  switch (error.code) {
+    case MediaError.MEDIA_ERR_ABORTED:
+      return "Playback was interrupted before the media loaded.";
+    case MediaError.MEDIA_ERR_NETWORK:
+      return "The media URL could not be read by the app.";
+    case MediaError.MEDIA_ERR_DECODE:
+      return "This video codec could not be decoded by the WebView.";
+    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+      return "The media source is not supported or is outside the allowed local-file scope.";
+    default:
+      return error.message || "Unknown media playback error.";
+  }
+}
+
 export function VideoPreview() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const project = useProjectStore((s) => s.project);
@@ -61,6 +81,8 @@ export function VideoPreview() {
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
   const [nativeDuration, setNativeDuration] = useState(0);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [loadMessage, setLoadMessage] = useState<string>("");
 
   const mediaPath = firstMediaPath(project);
   const src = mediaPath ? convertFileSrc(mediaPath) : null;
@@ -70,8 +92,8 @@ export function VideoPreview() {
   // While scrubbing, follow the drag; otherwise follow the player store.
   const displayedProgress = scrubbing
     ? scrubValue
-    : outputDuration > 0
-      ? Math.round((currentTime / outputDuration) * 1000)
+    : displayDurationForProgress(outputDuration, nativeDuration) > 0
+      ? Math.round((currentTime / displayDurationForProgress(outputDuration, nativeDuration)) * 1000)
       : 0;
 
   // Tracks the latest user intent so we can ignore stale Promise rejections
@@ -87,8 +109,14 @@ export function VideoPreview() {
     setCurrentTime(0);
     setPlaying(false);
     setNativeDuration(0);
+    setLoadState(src ? "loading" : "idle");
+    setLoadMessage(src ? "Loading media..." : "");
     el.pause();
-    el.currentTime = 0;
+    try {
+      el.currentTime = 0;
+    } catch {
+      /* ignored until metadata exists */
+    }
     el.load();
   }, [src, setCurrentTime, setPlaying]);
 
@@ -99,10 +127,18 @@ export function VideoPreview() {
     if (!el.currentSrc && src) {
       el.load();
     }
+    if (el.error) {
+      setLoadState("error");
+      setLoadMessage(videoErrorMessage(el.error));
+      setPlaying(false);
+      return false;
+    }
     const promise = el.play();
     if (promise) {
       promise.catch((err: DOMException) => {
         if (err.name === "AbortError") return;
+        setLoadState("error");
+        setLoadMessage(err.message || "Playback failed.");
         if (playIntentRef.current) setPlaying(false);
       });
     }
@@ -204,14 +240,42 @@ export function VideoPreview() {
       }
     }
 
-    const onPlay = () => setPlaying(true);
+    const onLoadedMetadata = () => {
+      setNativeDuration(Number.isFinite(el.duration) ? el.duration : 0);
+      setLoadState("ready");
+      setLoadMessage("");
+    };
+    const onCanPlay = () => {
+      setLoadState("ready");
+      setLoadMessage("");
+    };
+    const onWaiting = () => {
+      if (!el.paused) setLoadState("loading");
+    };
+    const onError = () => {
+      setLoadState("error");
+      setLoadMessage(el.error ? videoErrorMessage(el.error) : "Media failed to load.");
+      setPlaying(false);
+    };
+    const onPlay = () => {
+      setLoadState("ready");
+      setPlaying(true);
+    };
     const onPause = () => setPlaying(false);
 
     el.addEventListener("timeupdate", onTimeUpdate);
+    el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("canplay", onCanPlay);
+    el.addEventListener("waiting", onWaiting);
+    el.addEventListener("error", onError);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     return () => {
       el.removeEventListener("timeupdate", onTimeUpdate);
+      el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("canplay", onCanPlay);
+      el.removeEventListener("waiting", onWaiting);
+      el.removeEventListener("error", onError);
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
     };
@@ -246,6 +310,35 @@ export function VideoPreview() {
     },
     [project, outputDuration, setCurrentTime],
   );
+
+  useEffect(() => {
+    function onPlay() {
+      playVideo();
+    }
+    function onPause() {
+      pauseVideo();
+    }
+    function onToggle() {
+      if (usePlayerStore.getState().playing) pauseVideo();
+      else playVideo();
+    }
+    function onSeekOutput(e: Event) {
+      const ce = e as CustomEvent<{ time: number; play?: boolean }>;
+      seekToOutputTime(ce.detail.time);
+      if (ce.detail.play) playVideo();
+    }
+
+    window.addEventListener("scribe:play", onPlay);
+    window.addEventListener("scribe:pause", onPause);
+    window.addEventListener("scribe:toggle-play", onToggle);
+    window.addEventListener("scribe:seek-output", onSeekOutput);
+    return () => {
+      window.removeEventListener("scribe:play", onPlay);
+      window.removeEventListener("scribe:pause", onPause);
+      window.removeEventListener("scribe:toggle-play", onToggle);
+      window.removeEventListener("scribe:seek-output", onSeekOutput);
+    };
+  }, [pauseVideo, playVideo, seekToOutputTime]);
 
   const seekToSelectedWord = useCallback(() => {
     const el = videoRef.current;
@@ -327,12 +420,30 @@ export function VideoPreview() {
       <div className="flex flex-1 items-center justify-center overflow-hidden bg-black">
         <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.06),transparent_48%)]">
           <video
+            key={src}
             ref={videoRef}
             src={src}
             className="max-h-full max-w-full object-contain"
             controls={false}
+            preload="metadata"
             playsInline
           />
+          {loadState === "loading" && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45">
+              <div className="rounded-md border border-white/10 bg-black/75 px-4 py-3 text-sm text-white/75">
+                Loading media...
+              </div>
+            </div>
+          )}
+          {loadState === "error" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center">
+              <div className="max-w-sm rounded-md border border-red-400/30 bg-red-950/35 px-4 py-3 text-sm text-red-100">
+                <AlertTriangle className="mx-auto mb-2 h-5 w-5" />
+                <p className="font-semibold">Video could not be loaded</p>
+                <p className="mt-1 text-red-100/75">{loadMessage}</p>
+              </div>
+            </div>
+          )}
           <div className="pointer-events-none absolute left-4 top-4 rounded bg-black/55 px-2 py-1 text-[11px] font-medium text-white/80">
             Live preview
           </div>

@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-20
+
 ### Added
+- MVP-ready local media playback through Tauri's asset protocol.
+- Transcript-driven preview, filler highlighting, ripple delete, and export controls.
+- Timeline in/out markers with `I`/`O`, `Cmd+Delete` ripple delete, and J/K/L transport.
+- Left editor toolbox with Select, Razor, Slip, and Slide tools.
+- Centered progress modals for media loading, transcription, model download, and export.
 - Initial project scaffold for Phases 0–6 of the spec.
 - EDL data model (TypeScript + Rust) with full round-trip tests.
 - TipTap-based transcript editor with custom Word inline node.
@@ -18,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Whisper JSON parser, and the ffmpeg filter graph builder.
 - GitHub Actions CI workflow (lint, typecheck, test, build).
 
-### Not yet
+### Post-1.0
 - Sidecar binaries are not bundled — see `src-tauri/binaries/README.md`.
 - Auto-update manifest signing.
 - Code-signed `.dmg` distribution.

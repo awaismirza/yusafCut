@@ -12,10 +12,18 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore, useTemporalProjectStore } from "@/stores/projectStore";
-import { wordIdToOutputTime } from "@/lib/edl";
+import { useUIStore, type EditorTool } from "@/stores/uiStore";
+import { wordIdToOutputTime, wordIdsInOutputRange } from "@/lib/edl";
 
 function isMac() {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
+const SHUTTLE_RATES = [1, 1.2, 1.5, 1.8, 2] as const;
+
+function nextShuttleRate(current: number) {
+  const idx = SHUTTLE_RATES.findIndex((rate) => rate > current + 0.01);
+  return idx === -1 ? SHUTTLE_RATES[SHUTTLE_RATES.length - 1] : SHUTTLE_RATES[idx]!;
 }
 
 export function useKeyboardShortcuts() {
@@ -47,27 +55,46 @@ export function useKeyboardShortcuts() {
             );
           }
         }
-        s.setPlaying(!s.playing);
+        window.dispatchEvent(new CustomEvent("scribe:toggle-play"));
         return;
       }
 
       if (e.key.toLowerCase() === "j" && !inTextField) {
         e.preventDefault();
         const s = usePlayerStore.getState();
-        s.setRate(Math.max(0.25, s.rate / 2));
-        s.setPlaying(true);
+        const nextRate = e.shiftKey ? 0.5 : nextShuttleRate(s.playing ? s.rate : 0);
+        s.setRate(nextRate);
+        window.dispatchEvent(
+          new CustomEvent("scribe:seek-output", {
+            detail: { time: Math.max(0, s.currentTime - 3 * nextRate), play: true },
+          }),
+        );
         return;
       }
       if (e.key.toLowerCase() === "k" && !inTextField) {
         e.preventDefault();
-        usePlayerStore.getState().setPlaying(false);
+        window.dispatchEvent(new CustomEvent("scribe:pause"));
         return;
       }
       if (e.key.toLowerCase() === "l" && !inTextField) {
         e.preventDefault();
         const s = usePlayerStore.getState();
-        s.setRate(Math.min(4, s.rate * 2));
-        s.setPlaying(true);
+        const nextRate = nextShuttleRate(s.playing ? s.rate : 0);
+        s.setRate(nextRate);
+        window.dispatchEvent(new CustomEvent("scribe:play"));
+        return;
+      }
+
+      const toolShortcuts: Record<string, EditorTool> = {
+        v: "select",
+        c: "razor",
+        y: "slip",
+        u: "slide",
+      };
+      const nextTool = toolShortcuts[e.key.toLowerCase()];
+      if (nextTool && !inTextField) {
+        e.preventDefault();
+        useUIStore.getState().setActiveTool(nextTool);
         return;
       }
 
@@ -75,6 +102,11 @@ export function useKeyboardShortcuts() {
         e.preventDefault();
         const s = usePlayerStore.getState();
         s.setTimelineRange(s.currentTime, s.timelineMarkOut);
+        if (s.timelineMarkOut !== null) {
+          s.setSelectedWordIds(
+            wordIdsInOutputRange(useProjectStore.getState().project, s.currentTime, s.timelineMarkOut),
+          );
+        }
         return;
       }
 
@@ -82,6 +114,20 @@ export function useKeyboardShortcuts() {
         e.preventDefault();
         const s = usePlayerStore.getState();
         s.setTimelineRange(s.timelineMarkIn, s.currentTime);
+        if (s.timelineMarkIn !== null) {
+          s.setSelectedWordIds(
+            wordIdsInOutputRange(useProjectStore.getState().project, s.timelineMarkIn, s.currentTime),
+          );
+        }
+        return;
+      }
+
+      if (e.key.toLowerCase() === "x" && !inTextField) {
+        const s = usePlayerStore.getState();
+        if (s.timelineMarkIn === null && s.timelineMarkOut === null && s.selectedWordIds.size === 0) return;
+        e.preventDefault();
+        s.clearTimelineRange();
+        s.setSelectedWordIds([]);
         return;
       }
 
@@ -93,9 +139,14 @@ export function useKeyboardShortcuts() {
         if (!hasRange && selectedIds.length === 0) return;
         e.preventDefault();
         if (hasRange) {
+          const seekTo = Math.min(player.timelineMarkIn!, player.timelineMarkOut!);
           projectStore.deleteOutputRange(player.timelineMarkIn!, player.timelineMarkOut!);
           player.clearTimelineRange();
           player.setSelectedWordIds([]);
+          player.setCurrentTime(seekTo);
+          window.dispatchEvent(
+            new CustomEvent("scribe:seek-output", { detail: { time: seekTo, play: false } }),
+          );
           return;
         }
         projectStore.deleteWords(selectedIds);
