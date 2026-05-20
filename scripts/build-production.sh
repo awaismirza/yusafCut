@@ -172,12 +172,26 @@ else
   ok "whisper-cli present (${WSIZE})"
 fi
 
+# ── 5b. whisperkit-cli — build from source if stub or missing ─────────────────
 WHISPERKIT_BIN="$BINS/whisperkit-cli-$ARCH_SUFFIX"
-if [[ ! -x "$WHISPERKIT_BIN" ]]; then
-  warn "whisperkit-cli not found — WhisperKit ANE transcription will not work."
-else
+_wk_is_stub() {
+  [[ -f "$WHISPERKIT_BIN" ]] && head -1 "$WHISPERKIT_BIN" 2>/dev/null | grep -q "^#!"
+}
+if [[ -f "$WHISPERKIT_BIN" ]] && [[ -x "$WHISPERKIT_BIN" ]] && ! _wk_is_stub; then
   WKSIZE=$(du -sh "$WHISPERKIT_BIN" | awk '{print $1}')
   ok "whisperkit-cli present (${WKSIZE})"
+else
+  if _wk_is_stub; then
+    info "whisperkit-cli is a dev stub — replacing with real binary…"
+  else
+    info "whisperkit-cli not found — building from source…"
+  fi
+  if ! command -v swift >/dev/null 2>&1; then
+    die "Swift not found — cannot build whisperkit-cli.\nInstall Xcode from the App Store (full Xcode, not just CLT)."
+  fi
+  bash "$REPO/scripts/build-whisperkit-cli.sh"
+  WKSIZE=$(du -sh "$WHISPERKIT_BIN" | awk '{print $1}')
+  ok "whisperkit-cli built and installed (${WKSIZE})"
 fi
 
 # ── 6. tauri build --bundles dmg ──────────────────────────────────────────────

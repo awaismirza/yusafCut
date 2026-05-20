@@ -33,6 +33,7 @@
     "test:all": "npm run test && npm run test:rust && npm run test:sidecar",
     "sidecar:setup": "python3 -m venv sidecars/mlx-llm/.venv && sidecars/mlx-llm/.venv/bin/pip install -e sidecars/mlx-llm",
     "sidecar:build": "python sidecars/mlx-llm/build.py",
+    "whisperkit:build": "bash scripts/build-whisperkit-cli.sh",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "ci": "npm run check && npm run test && npm run test:rust && npm run test:sidecar"
   },

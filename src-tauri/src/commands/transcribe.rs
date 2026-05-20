@@ -840,12 +840,10 @@ async fn transcribe_whisperkit(
         ));
     }
 
-    // whisperkit-cli output JSON path: we pass --output-dir and pick up the result.
-    let out_dir = std::env::temp_dir().join(format!("scribe-wk-{}", uuid::Uuid::new_v4()));
-    fs::create_dir_all(&out_dir)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    // whisperkit-cli writes `<audio-stem>.json` next to the audio file when
+    // `--report` is passed.  We do NOT use `--output-dir` — that flag does not
+    // exist in the Argmax CLI; the output location is always the directory that
+    // contains the audio file.
     let shell = app.shell();
     let wk = shell
         .sidecar("whisperkit-cli")
@@ -857,9 +855,7 @@ async fn transcribe_whisperkit(
             "--model-path",
             model_dir.to_str().unwrap(),
             "--word-timestamps",
-            "--output-dir",
-            out_dir.to_str().unwrap(),
-            "--report",          // write a JSON report file
+            "--report",          // write <audio-stem>.json next to the wav
         ]);
 
     let (mut rx, _child) = wk.spawn().map_err(|e| format!("spawn whisperkit-cli: {e}"))?;
@@ -913,20 +909,16 @@ async fn transcribe_whisperkit(
         }
     }
 
-    // whisperkit-cli writes `<stem>.json` into --output-dir.
-    let stem = wav
-        .file_stem()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string();
-    let json_path = out_dir.join(format!("{stem}.json"));
+    // whisperkit-cli writes `<audio-stem>.json` in the same directory as the
+    // wav file when --report is passed.
+    let json_path = wav.with_extension("json");
     let json = fs::read_to_string(&json_path)
         .await
         .map_err(|e| format!("reading whisperkit json {}: {}", json_path.display(), e))?;
     let words = parse_whisperkit_json(&json).map_err(|e| e.to_string())?;
 
     let _ = fs::remove_file(wav).await;
-    let _ = fs::remove_dir_all(&out_dir).await;
+    let _ = fs::remove_file(&json_path).await;
 
     Ok(words)
 }
