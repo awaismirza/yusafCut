@@ -48,13 +48,15 @@ import {
   newProject,
   totalDuration,
   type Project,
-  type SourceMedia,
   type Word,
 } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
 import { Toolbox } from "@/components/Toolbox/Toolbox";
-
-const TRANSCRIPT_CACHE_PREFIX = "scribe.transcript.v1.";
+import {
+  cacheProjectTranscripts,
+  readTranscriptCache,
+  writeTranscriptCache,
+} from "@/lib/transcriptCache";
 
 const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "tiny", label: "Tiny (fast, lower accuracy)", sizeMb: 75 },
@@ -64,39 +66,37 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "large-v3-turbo", label: "Large v3 Turbo (recommended)", sizeMb: 1600 },
 ];
 
-function transcriptCacheKey(media: SourceMedia): string {
-  return `${TRANSCRIPT_CACHE_PREFIX}${media.sha256}`;
+const MEDIA_EXTENSIONS = ["mp4", "mov", "m4v", "mkv", "webm", "m4a", "wav"];
+
+function mediaNameFromPath(path: string, fallback = "Untitled") {
+  return (
+    path
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.[^.]+$/, "") || fallback
+  );
 }
 
-function readTranscriptCache(media: SourceMedia): Word[] | null {
-  try {
-    const raw = localStorage.getItem(transcriptCacheKey(media));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { words?: Word[] };
-    return Array.isArray(parsed.words) ? parsed.words : null;
-  } catch {
-    return null;
-  }
+function wordsForMedia(project: Project, mediaId: string) {
+  return project.segments
+    .filter((segment) => segment.mediaId === mediaId)
+    .flatMap((segment) => segment.words);
 }
 
-function writeTranscriptCache(media: SourceMedia, words: Word[]) {
-  try {
-    localStorage.setItem(
-      transcriptCacheKey(media),
-      JSON.stringify({ mediaSha256: media.sha256, updatedAt: new Date().toISOString(), words }),
-    );
-  } catch {
-    // Cache failure should never block editing.
-  }
-}
-
-function cacheProjectTranscripts(project: Project) {
-  for (const media of Object.values(project.media)) {
-    const words = project.segments
-      .filter((segment) => segment.mediaId === media.id)
-      .flatMap((segment) => segment.words);
-    if (words.length > 0) writeTranscriptCache(media, words);
-  }
+function applyTranscriptToMedia(project: Project, mediaId: string, words: Word[]): Project {
+  return {
+    ...project,
+    segments: project.segments.map((segment) => {
+      if (segment.mediaId !== mediaId || segment.words.length > 0) return segment;
+      return {
+        ...segment,
+        words: words.filter(
+          (word) => word.end > segment.sourceIn && word.start < segment.sourceOut,
+        ),
+      };
+    }),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 interface ToolbarProps {
@@ -148,17 +148,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   async function handleOpen() {
     const path = await openDialog({
       multiple: false,
-      filters: [{ name: "Media", extensions: ["mp4", "mov", "m4v", "mkv", "webm", "m4a", "wav"] }],
+      filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
     });
     if (typeof path !== "string") return;
     setMediaLoading(true);
     try {
       const media = await importMedia(path);
-      const name =
-        media.path
-          .split(/[\\/]/)
-          .pop()
-          ?.replace(/\.[^.]+$/, "") || "Untitled";
+      const name = mediaNameFromPath(media.path);
       const cachedWords = readTranscriptCache(media);
       const nextProject = buildProjectWithMedia(newProject(name), media, cachedWords ?? []);
       resetPlayer();
@@ -170,6 +166,44 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     } catch (err) {
       pushToast({
         title: "Failed to import media",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function handleAddClip() {
+    const path = await openDialog({
+      multiple: false,
+      filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
+    });
+    if (typeof path !== "string") return;
+    await addClipToTimeline(path);
+  }
+
+  async function addClipToTimeline(path: string) {
+    setMediaLoading(true);
+    try {
+      const before = useProjectStore.getState().project;
+      const appendAt = totalDuration(before);
+      const media = await importMedia(path);
+      const cachedWords = readTranscriptCache(media) ?? [];
+      useProjectStore.getState().addMediaWithTranscript(media, cachedWords);
+      usePlayerStore.getState().clearTimelineRange();
+      usePlayerStore.getState().setSelectedWordIds(new Set());
+      window.dispatchEvent(new CustomEvent("scribe:seek-output", { detail: { time: appendAt } }));
+      pushToast({
+        title: cachedWords.length > 0 ? "Clip added with cached transcript" : "Clip added",
+        description:
+          cachedWords.length > 0
+            ? media.path
+            : "Click Transcribe to generate text for this clip.",
+      });
+    } catch (err) {
+      pushToast({
+        title: "Failed to add clip",
         description: String(err),
         variant: "destructive",
       });
@@ -209,11 +243,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     setMediaLoading(true);
     try {
       const media = await importMedia(path);
-      const name =
-        media.path
-          .split(/[\\/]/)
-          .pop()
-          ?.replace(/\.[^.]+$/, "") || label;
+      const name = mediaNameFromPath(media.path, label);
       const projectWithMedia = buildProjectWithMedia(newProject(name), media, []);
       resetPlayer();
       replaceProjectBaseline(projectWithMedia, { dirty: true, filePath: null });
@@ -305,8 +335,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   }
 
   async function handleTranscribe() {
-    const ids = Object.keys(project.media);
-    if (ids.length === 0) {
+    const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
+    if (mediaIds.length === 0) {
       pushToast({ title: "Open a video first", variant: "destructive" });
       return;
     }
@@ -361,8 +391,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
   async function startTranscribe() {
     setModelDialogOpen(false);
-    const ids = Object.keys(project.media);
-    if (ids.length === 0) return;
+    const mediaIds = Array.from(new Set(project.segments.map((segment) => segment.mediaId)));
+    if (mediaIds.length === 0) return;
 
     try {
       // ── Step 1: download the model if it isn't on disk yet ──────────────
@@ -378,33 +408,41 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       }
 
       // ── Step 2: transcribe ───────────────────────────────────────────────
-      const media = project.media[ids[0]!]!;
-      const result = await transcribe({
-        mediaId: ids[0]!,
-        mediaPath: media.path,
-        modelName: selectedModel,
-        mediaDuration: media.duration,
-      });
-      writeTranscriptCache(media, result.words);
+      let nextProject = useProjectStore.getState().project;
+      let totalWords = 0;
+      let transcribedClips = 0;
+      for (const mediaId of mediaIds) {
+        const media = nextProject.media[mediaId];
+        if (!media) continue;
+        const cached = readTranscriptCache(media);
+        const existingWords = wordsForMedia(nextProject, mediaId);
+        if (existingWords.length > 0) {
+          totalWords += existingWords.length;
+          continue;
+        }
+        const words =
+          cached ??
+          (
+            await transcribe({
+              mediaId,
+              mediaPath: media.path,
+              modelName: selectedModel,
+              mediaDuration: media.duration,
+            })
+          ).words;
+        if (!cached) writeTranscriptCache(media, words);
+        nextProject = applyTranscriptToMedia(nextProject, mediaId, words);
+        totalWords += words.length;
+        transcribedClips++;
+      }
 
-      // Replace the empty initial transcript with the real words.
-      const next = {
-        ...project,
-        segments: [
-          {
-            id: crypto.randomUUID(),
-            mediaId: media.id,
-            words: result.words,
-            sourceIn: 0,
-            sourceOut: media.duration,
-          },
-        ],
-        updatedAt: new Date().toISOString(),
-      };
-      replaceProjectBaseline(next, { dirty: true, filePath });
+      replaceProjectBaseline(nextProject, { dirty: true, filePath });
       pushToast({
         title: "Transcription complete",
-        description: `${result.words.length} words`,
+        description:
+          transcribedClips > 0
+            ? `${totalWords} words across ${mediaIds.length} clip${mediaIds.length === 1 ? "" : "s"}`
+            : "All clips already had transcript text",
       });
     } catch (err) {
       pushToast({
@@ -526,6 +564,9 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         <div className="tool-group">
           <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
             <FolderOpen className="h-4 w-4" /> Open Media
+          </Button>
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
+            <Scissors className="h-4 w-4" /> Add Clip
           </Button>
           <Button
             size="sm"

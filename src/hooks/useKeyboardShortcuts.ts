@@ -49,7 +49,9 @@ export function useKeyboardShortcuts() {
           }
           if (best) {
             window.dispatchEvent(
-              new CustomEvent("scribe:seek-source", { detail: { start: best.sourceTime } }),
+              new CustomEvent("scribe:seek-output", {
+                detail: { time: best.outputTime, play: true },
+              }),
             );
           }
         }
