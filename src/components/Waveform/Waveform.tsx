@@ -6,8 +6,14 @@
  * Filler words are highlighted amber so the transcript and timeline agree.
  */
 
-import { useMemo, useRef } from "react";
-import { computeTimeline, outputTimeToSource, totalDuration, type Word } from "@/lib/edl";
+import { useMemo, useRef, useState } from "react";
+import {
+  computeTimeline,
+  outputTimeToSource,
+  totalDuration,
+  wordIdsInOutputRange,
+  type Word,
+} from "@/lib/edl";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import { FILLER_WORDS } from "@/components/TranscriptEditor/WordNode";
@@ -32,7 +38,13 @@ export function Waveform() {
   const project = useProjectStore((s) => s.project);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const selectedWordIds = usePlayerStore((s) => s.selectedWordIds);
+  const timelineMarkIn = usePlayerStore((s) => s.timelineMarkIn);
+  const timelineMarkOut = usePlayerStore((s) => s.timelineMarkOut);
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime);
+  const setSelectedWordIds = usePlayerStore((s) => s.setSelectedWordIds);
+  const setTimelineRange = usePlayerStore((s) => s.setTimelineRange);
+  const [dragStart, setDragStart] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const firstMedia = Object.values(project.media)[0];
   const duration = totalDuration(project);
@@ -70,12 +82,16 @@ export function Waveform() {
     return { bars: nextBars, ticks: nextTicks };
   }, [project, selectedWordIds]);
 
-  function seekFromPointer(e: React.MouseEvent<HTMLDivElement>) {
+  function outputTimeFromPointer(e: React.MouseEvent<HTMLDivElement>) {
     const rail = railRef.current;
-    if (!rail || !firstMedia) return;
+    if (!rail) return null;
     const rect = rail.getBoundingClientRect();
     const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const outputTime = fraction * duration;
+    return fraction * duration;
+  }
+
+  function seekToOutputTime(outputTime: number) {
+    if (!firstMedia) return;
     const mapped = outputTimeToSource(project, outputTime);
     if (!mapped) return;
     setCurrentTime(outputTime);
@@ -83,6 +99,38 @@ export function Waveform() {
       new CustomEvent("scribe:seek-source", { detail: { start: mapped.sourceTime } }),
     );
     usePlayerStore.getState().setPlaying(true);
+  }
+
+  function updateSelection(markIn: number, markOut: number) {
+    setTimelineRange(markIn, markOut);
+    setSelectedWordIds(wordIdsInOutputRange(project, markIn, markOut));
+  }
+
+  function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    const outputTime = outputTimeFromPointer(e);
+    if (outputTime === null) return;
+    setDragStart(outputTime);
+    setDragging(false);
+  }
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (dragStart === null) return;
+    const outputTime = outputTimeFromPointer(e);
+    if (outputTime === null) return;
+    if (Math.abs(outputTime - dragStart) > 0.05) setDragging(true);
+    updateSelection(dragStart, outputTime);
+  }
+
+  function handleMouseUp(e: React.MouseEvent<HTMLDivElement>) {
+    const outputTime = outputTimeFromPointer(e);
+    if (outputTime === null) return;
+    if (!dragging || dragStart === null) {
+      seekToOutputTime(outputTime);
+    } else {
+      updateSelection(dragStart, outputTime);
+    }
+    setDragStart(null);
+    setDragging(false);
   }
 
   if (!firstMedia) {
@@ -102,6 +150,13 @@ export function Waveform() {
   }
 
   const playheadLeft = Math.max(0, Math.min(100, (currentTime / duration) * 100));
+  const hasTimelineRange = timelineMarkIn !== null && timelineMarkOut !== null;
+  const selectionStart = hasTimelineRange
+    ? (Math.min(timelineMarkIn!, timelineMarkOut!) / duration) * 100
+    : 0;
+  const selectionWidth = hasTimelineRange
+    ? (Math.abs(timelineMarkOut! - timelineMarkIn!) / duration) * 100
+    : 0;
 
   return (
     <div className="timeline-panel">
@@ -115,7 +170,13 @@ export function Waveform() {
         <div className="timeline-help">shift-drag selects words · click timeline to seek</div>
       </div>
 
-      <div ref={railRef} className="timeline-rail" onClick={seekFromPointer}>
+      <div
+        ref={railRef}
+        className="timeline-rail"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+      >
         <div className="timeline-ticks">
           {ticks.map((tick) => (
             <span key={tick.label} style={{ left: `${tick.left}%` }}>
@@ -141,6 +202,15 @@ export function Waveform() {
             />
           ))}
         </div>
+        {hasTimelineRange && selectionWidth > 0.1 && (
+          <div
+            className="timeline-selection"
+            style={{ left: `${selectionStart}%`, width: `${selectionWidth}%` }}
+          >
+            <span className="mark-in" />
+            <span className="mark-out" />
+          </div>
+        )}
         <div className="timeline-playhead" style={{ left: `${playheadLeft}%` }}>
           <span />
         </div>

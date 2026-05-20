@@ -14,6 +14,7 @@ import {
   addMediaWithTranscript,
   deleteWords,
   newProject,
+  wordIdsInOutputRange,
   type Project,
   type SourceMedia,
   type Word,
@@ -31,6 +32,7 @@ interface ProjectState {
   rename: (name: string) => void;
   addMediaWithTranscript: (media: SourceMedia, words: Word[]) => void;
   deleteWords: (ids: Iterable<string>) => void;
+  deleteOutputRange: (markIn: number, markOut: number) => number;
   /** Delete every word whose text (case-insensitive, punctuation-stripped)
    *  matches one of the given tokens. Returns the count of words removed. */
   deleteWordsByText: (tokens: ReadonlySet<string>) => number;
@@ -75,6 +77,17 @@ export const useProjectStore = create<ProjectState>()(
           project: deleteWords(s.project, new Set(ids)),
           dirty: true,
         })),
+
+      deleteOutputRange: (markIn, markOut) => {
+        const project = _get().project;
+        const ids = wordIdsInOutputRange(project, markIn, markOut);
+        if (ids.length === 0) return 0;
+        set({
+          project: deleteWords(project, new Set(ids)),
+          dirty: true,
+        });
+        return ids.length;
+      },
 
       deleteWordsByText: (tokens) => {
         let removed = 0;

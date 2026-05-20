@@ -168,6 +168,26 @@ export function wordIdToOutputTime(
   return null;
 }
 
+/** Return surviving word IDs whose output-time span overlaps the given range. */
+export function wordIdsInOutputRange(project: Project, markIn: number, markOut: number): string[] {
+  const start = Math.min(markIn, markOut);
+  const end = Math.max(markIn, markOut);
+  if (end <= start) return [];
+
+  const ids: string[] = [];
+  const timeline = computeTimeline(project);
+  for (const entry of timeline) {
+    const segment = project.segments.find((s) => s.id === entry.segmentId);
+    if (!segment) continue;
+    for (const word of segment.words) {
+      const wordOutStart = entry.outputStart + Math.max(0, word.start - entry.sourceIn);
+      const wordOutEnd = entry.outputStart + Math.max(0, word.end - entry.sourceIn);
+      if (wordOutStart < end && wordOutEnd > start) ids.push(word.id);
+    }
+  }
+  return ids;
+}
+
 /** Given a source time within a media file, find the *next* surviving segment
  * for that media (used by the player to skip deleted ranges). Returns null if
  * we're past the last segment for the media. */

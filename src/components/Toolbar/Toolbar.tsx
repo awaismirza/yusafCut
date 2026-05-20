@@ -312,93 +312,83 @@ export function Toolbar() {
   }, [handleSave, handleExport]);
 
   return (
-    <div className="relative flex h-12 items-center gap-1 border-b border-border bg-background px-3">
-      <div className="flex items-center gap-1">
-        <Button size="sm" variant="ghost" onClick={handleOpen}>
-          <FolderOpen className="mr-1 h-4 w-4" /> Open
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            setProject(newProject("Untitled"));
-            useProjectStore.temporal.getState().clear();
-            resetPlayer();
-          }}
-        >
-          <FilePlus2 className="mr-1 h-4 w-4" /> New
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={async () => {
-            const path = await openDialog({
-              multiple: false,
-              filters: [{ name: "Scribe project", extensions: ["scribe"] }],
-            });
-            if (typeof path !== "string") return;
-            try {
-              const loaded = await loadProject(path);
-              setProject(loaded);
-              markSaved(path);
-              pushToast({ title: "Project opened", description: path });
-            } catch (err) {
-              pushToast({
-                title: "Failed to open project",
-                description: String(err),
-                variant: "destructive",
+    <div className="editor-toolbar">
+      <div className="editor-toolbar-top">
+        <div className="traffic-lights" aria-hidden="true">
+          <span className="bg-[#ff5f57]" />
+          <span className="bg-[#febc2e]" />
+          <span className="bg-[#28c840]" />
+        </div>
+
+        <div className="toolbar-title">
+          <span>{displayName}</span>
+          <span>{dirty ? "unsaved edits" : "no edits"}</span>
+        </div>
+
+        <div className="toolbar-export">
+          <span className="toolbar-duration">{formatDuration(totalDuration(project))}</span>
+          <Button size="sm" onClick={handleExport} className="h-8 gap-2 rounded-md px-3 font-semibold">
+            <Download className="h-4 w-4" /> Export .mp4
+          </Button>
+        </div>
+      </div>
+
+      <div className="editor-toolbar-bottom">
+        <div className="tool-group">
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+            <FolderOpen className="h-4 w-4" /> Open Media
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            onClick={() => {
+              setProject(newProject("Untitled"));
+              useProjectStore.temporal.getState().clear();
+              resetPlayer();
+            }}
+          >
+            <FilePlus2 className="h-4 w-4" /> New
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            onClick={async () => {
+              const path = await openDialog({
+                multiple: false,
+                filters: [{ name: "Scribe project", extensions: ["scribe"] }],
               });
-            }
-          }}
-        >
-          <FolderOpen className="mr-1 h-4 w-4" /> Open Project
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleSave}>
-          <Save className="mr-1 h-4 w-4" /> Save {dirty && "*"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleCloseProject}>
-          <Power className="mr-1 h-4 w-4" /> Close Project
-        </Button>
-      </div>
+              if (typeof path !== "string") return;
+              try {
+                const loaded = await loadProject(path);
+                setProject(loaded);
+                markSaved(path);
+                pushToast({ title: "Project opened", description: path });
+              } catch (err) {
+                pushToast({
+                  title: "Failed to open project",
+                  description: String(err),
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            <FolderOpen className="h-4 w-4" /> Project
+          </Button>
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+            <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+          </Button>
+        </div>
 
-      <div className="ml-4 flex items-center gap-1 border-l border-border pl-4">
-        <Button size="sm" variant="ghost" onClick={handleTranscribe}>
-          <MicVocal className="mr-1 h-4 w-4" /> Transcribe
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleExport}>
-          <Download className="mr-1 h-4 w-4" /> Export .mp4
-        </Button>
-      </div>
-
-      <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 text-sm font-semibold text-foreground/80 md:flex">
-        <span>{displayName}</span>
-        <span className="text-muted-foreground">—</span>
-        <span className="font-medium text-muted-foreground">{dirty ? "unsaved edits" : "no edits"}</span>
-      </div>
-
-      <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-        {modelDownloadProgress !== null && (
-          <div className="flex w-52 items-center gap-2">
-            <Download className="h-3 w-3 shrink-0" />
-            <span className="shrink-0">Downloading…</span>
-            <Progress value={modelDownloadProgress * 100} className="flex-1" />
-          </div>
-        )}
-        {transcribeProgress !== null && (
-          <div className="flex w-44 items-center gap-2">
-            <MicVocal className="h-3 w-3 shrink-0" />
-            <span className="shrink-0">Transcribing…</span>
-            <Progress value={transcribeProgress * 100} className="flex-1" />
-          </div>
-        )}
-        {exportingProgress !== null && (
-          <div className="flex w-44 items-center gap-2">
-            <Scissors className="h-3 w-3 shrink-0" />
-            <span className="shrink-0">Exporting…</span>
-            <Progress value={exportingProgress * 100} className="flex-1" />
-          </div>
-        )}
-        <span>{formatDuration(totalDuration(project))}</span>
+        <div className="tool-group">
+          <Button size="sm" variant="ghost" className="tool-button tool-button-primary" onClick={handleTranscribe}>
+            <MicVocal className="h-4 w-4" /> Transcribe
+          </Button>
+          <Button size="sm" variant="ghost" className="tool-button tool-button-danger" onClick={handleCloseProject}>
+            <Power className="h-4 w-4" /> Close
+          </Button>
+        </div>
       </div>
 
       <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
@@ -646,6 +636,69 @@ export function Toolbar() {
               Export .mp4
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={transcribeProgress !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MicVocal className="h-4 w-4 text-primary" />
+              Transcribing media
+            </DialogTitle>
+            <DialogDescription>
+              Scribe is building the word-level edit timeline locally on this Mac.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={(transcribeProgress ?? 0) * 100} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Whisper running locally</span>
+              <span>{Math.round((transcribeProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={exportingProgress !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="h-4 w-4 text-primary" />
+              Exporting video
+            </DialogTitle>
+            <DialogDescription>
+              Rendering the edited timeline with your selected export settings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={(exportingProgress ?? 0) * 100} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Writing .mp4</span>
+              <span>{Math.round((exportingProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modelDownloadProgress !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-4 w-4 text-primary" />
+              Downloading model
+            </DialogTitle>
+            <DialogDescription>
+              Preparing the local transcription model.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={(modelDownloadProgress ?? 0) * 100} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Model download</span>
+              <span>{Math.round((modelDownloadProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

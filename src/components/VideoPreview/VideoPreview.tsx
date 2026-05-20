@@ -79,23 +79,38 @@ export function VideoPreview() {
   // play() flips `playing` back to false and pauses the video immediately.
   const playIntentRef = useRef(false);
 
+  const playVideo = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) return false;
+    playIntentRef.current = true;
+    const promise = el.play();
+    if (promise) {
+      promise.catch((err: DOMException) => {
+        if (err.name === "AbortError") return;
+        if (playIntentRef.current) setPlaying(false);
+      });
+    }
+    setPlaying(true);
+    return true;
+  }, [setPlaying]);
+
+  const pauseVideo = useCallback(() => {
+    const el = videoRef.current;
+    playIntentRef.current = false;
+    if (el) el.pause();
+    setPlaying(false);
+  }, [setPlaying]);
+
   // ── Drive play/pause state from store ────────────────────────────────────
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    playIntentRef.current = playing;
-    if (playing) {
-      // Don't await — fire-and-forget. Only flip state back if the call
-      // actually failed AND we still intend to be playing (i.e. the failure
-      // wasn't because another seek/play call superseded us).
-      el.play().catch((err: DOMException) => {
-        if (err.name === "AbortError") return; // interrupted by another play() — ignore
-        if (playIntentRef.current) setPlaying(false);
-      });
-    } else {
-      el.pause();
+    if (playing && el.paused) {
+      playVideo();
+    } else if (!playing && !el.paused) {
+      pauseVideo();
     }
-  }, [playing, setPlaying]);
+  }, [pauseVideo, playVideo, playing]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -125,11 +140,11 @@ export function VideoPreview() {
       } else {
         setCurrentTime(ce.detail.start);
       }
-      setPlaying(true);
+      playVideo();
     };
     window.addEventListener("scribe:seek-source", handler);
     return () => window.removeEventListener("scribe:seek-source", handler);
-  }, [project, setCurrentTime, setPlaying]);
+  }, [playVideo, project, setCurrentTime]);
 
   // ── Time update: skip deleted ranges, update store ────────────────────────
   useEffect(() => {
@@ -260,11 +275,11 @@ export function VideoPreview() {
 
   const handlePlayPause = () => {
     if (playing) {
-      setPlaying(false);
+      pauseVideo();
       return;
     }
     seekToSelectedWord();
-    setPlaying(true);
+    playVideo();
   };
 
   // Display duration: use source duration in free-play mode, output duration otherwise

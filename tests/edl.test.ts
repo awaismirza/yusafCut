@@ -12,6 +12,7 @@ import {
   splitSegmentAtWord,
   totalDuration,
   wordIdToOutputTime,
+  wordIdsInOutputRange,
   type SourceMedia,
   type Word,
 } from "@/lib/edl";
@@ -168,6 +169,38 @@ describe("EDL — pure functions", () => {
       expect(wordIdToOutputTime(p, "w-a")?.outputTime).toBeCloseTo(0.25);
       expect(wordIdToOutputTime(p, "w-b")?.outputTime).toBeCloseTo(2.5);
       expect(wordIdToOutputTime(p, "missing")).toBeNull();
+    });
+  });
+
+  describe("wordIdsInOutputRange", () => {
+    it("finds words overlapping an output-time timeline selection", () => {
+      const p = newProject("t");
+      p.segments = [
+        {
+          id: "a",
+          mediaId: "m",
+          words: [
+            { id: "w-a", text: "a", start: 0, end: 0.5, confidence: 1 },
+            { id: "w-b", text: "b", start: 0.5, end: 1, confidence: 1 },
+          ],
+          sourceIn: 0,
+          sourceOut: 1,
+        },
+        {
+          id: "b",
+          mediaId: "m",
+          words: [
+            { id: "w-c", text: "c", start: 5, end: 5.5, confidence: 1 },
+            { id: "w-d", text: "d", start: 5.5, end: 6, confidence: 1 },
+          ],
+          sourceIn: 5,
+          sourceOut: 6,
+        },
+      ];
+
+      expect(wordIdsInOutputRange(p, 0.25, 1.25)).toEqual(["w-a", "w-b", "w-c"]);
+      expect(wordIdsInOutputRange(p, 1.25, 0.25)).toEqual(["w-a", "w-b", "w-c"]);
+      expect(wordIdsInOutputRange(p, 2, 2)).toEqual([]);
     });
   });
 
