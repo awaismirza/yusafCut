@@ -58,6 +58,31 @@ export interface Chapter {
   title: string;
 }
 
+/**
+ * An audio track laid under the main spoken EDL. Used for music beds, ambient
+ * loops, sound effects. Mixed in at export time; never re-encodes the source.
+ *
+ * Tracks reference `project.media` like any other clip. The mediaId may point
+ * to either an audio-only file (mp3 / m4a / wav) or a video — only the audio
+ * stream is used.
+ *
+ * The track plays from `offsetSec` on the OUTPUT timeline. Negative offsets
+ * are allowed (track starts before the visible content) and silently clipped
+ * at 0 during mixing. `gainDb` is applied before the mix; positive boosts.
+ * `ducks` enables sidechain ducking against the main voice — when the speaker
+ * is talking the music drops by ~12 dB and recovers on the tail.
+ */
+export interface AudioTrack {
+  id: string;
+  mediaId: MediaId;
+  /** Volume adjustment in dB. 0 = unity. Negative = quieter. */
+  gainDb: number;
+  /** When on the output timeline the track begins, in seconds. */
+  offsetSec: number;
+  /** If true, the main voice ducks this track via sidechain compression. */
+  ducks: boolean;
+}
+
 export interface Project {
   version: 1;
   id: string;
@@ -69,6 +94,8 @@ export interface Project {
   settings: ProjectSettings;
   /** Optional — older v2.0 projects don't have this field. Empty by default. */
   chapters?: Chapter[];
+  /** Optional — music beds / sfx mixed under the main EDL. Empty by default. */
+  audioTracks?: AudioTrack[];
 }
 
 export interface TimelineEntry {
@@ -498,6 +525,74 @@ export function renameChapter(project: Project, id: string, title: string): Proj
   return { ...project, chapters: next, updatedAt: new Date().toISOString() };
 }
 
+// ---------------------------------------------------------------------------
+// Audio tracks — pure helpers. All return a new Project; never mutate.
+// ---------------------------------------------------------------------------
+
+/** Read audio tracks defensively — older projects don't have the field. */
+export function projectAudioTracks(project: Project): AudioTrack[] {
+  return project.audioTracks ?? [];
+}
+
+/** Add a new music bed / sfx track. The media must already be in
+ * `project.media`. Returns a new project. */
+export function addAudioTrack(
+  project: Project,
+  track: Omit<AudioTrack, "id"> & { id?: string },
+): Project {
+  if (!project.media[track.mediaId]) {
+    throw new Error(`audio track references unknown media: ${track.mediaId}`);
+  }
+  const next: AudioTrack = {
+    id: track.id ?? uuidv4(),
+    mediaId: track.mediaId,
+    gainDb: clampGain(track.gainDb),
+    offsetSec: Number.isFinite(track.offsetSec) ? track.offsetSec : 0,
+    ducks: !!track.ducks,
+  };
+  return {
+    ...project,
+    audioTracks: [...projectAudioTracks(project), next],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function removeAudioTrack(project: Project, id: string): Project {
+  const tracks = projectAudioTracks(project);
+  const next = tracks.filter((t) => t.id !== id);
+  if (next.length === tracks.length) return project;
+  return { ...project, audioTracks: next, updatedAt: new Date().toISOString() };
+}
+
+export function updateAudioTrack(
+  project: Project,
+  id: string,
+  patch: Partial<Omit<AudioTrack, "id" | "mediaId">>,
+): Project {
+  const tracks = projectAudioTracks(project);
+  const idx = tracks.findIndex((t) => t.id === id);
+  if (idx === -1) return project;
+  const cur = tracks[idx]!;
+  const next: AudioTrack = {
+    ...cur,
+    ...patch,
+    gainDb: patch.gainDb !== undefined ? clampGain(patch.gainDb) : cur.gainDb,
+    offsetSec:
+      patch.offsetSec !== undefined && Number.isFinite(patch.offsetSec)
+        ? patch.offsetSec
+        : cur.offsetSec,
+  };
+  const out = tracks.slice();
+  out[idx] = next;
+  return { ...project, audioTracks: out, updatedAt: new Date().toISOString() };
+}
+
+/** Clamp gain to a sensible range: -60 dB (effectively silent) to +12 dB. */
+function clampGain(db: number): number {
+  if (!Number.isFinite(db)) return 0;
+  return Math.max(-60, Math.min(12, db));
+}
+
 /** Create a brand new empty project. */
 export function newProject(name: string): Project {
   const now = new Date().toISOString();
@@ -514,5 +609,6 @@ export function newProject(name: string): Project {
       paddingMs: DEFAULT_PADDING_MS,
     },
     chapters: [],
+    audioTracks: [],
   };
 }

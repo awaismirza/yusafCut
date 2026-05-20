@@ -12,6 +12,7 @@ import { usePlayerStore } from "@/stores/playerStore";
 import { totalDuration } from "@/lib/edl";
 import { formatTimecode } from "@/lib/timecode";
 import { FILLER_WORDS } from "@/components/TranscriptEditor/WordNode";
+import { JobsFlyout } from "@/components/StatusBar/JobsFlyout";
 
 export function StatusBar() {
   const project = useProjectStore((s) => s.project);
@@ -35,6 +36,8 @@ export function StatusBar() {
 
   return (
     <div className="scribe-statusbar">
+      <JobsFlyout />
+      <span className="sep">·</span>
       <span className="chip">
         <span className="pulse" />
         CoreML active

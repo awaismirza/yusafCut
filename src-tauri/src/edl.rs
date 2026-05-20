@@ -70,6 +70,24 @@ pub struct Chapter {
     pub title: String,
 }
 
+/// A music bed / sfx track laid under the main spoken EDL. Mixed in only at
+/// export — never mutates the source media. The mediaId must reference an
+/// entry in `Project::media`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioTrack {
+    pub id: String,
+    #[serde(rename = "mediaId")]
+    pub media_id: MediaId,
+    /// Volume adjustment in dB. 0 = unity.
+    #[serde(rename = "gainDb")]
+    pub gain_db: f64,
+    /// When on the output timeline the track begins, in seconds.
+    #[serde(rename = "offsetSec")]
+    pub offset_sec: f64,
+    /// If true, sidechain-compress the track under the main voice.
+    pub ducks: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub version: u32,
@@ -85,6 +103,9 @@ pub struct Project {
     /// Optional — older v2.0 projects deserialise with `chapters = Vec::new()`.
     #[serde(default)]
     pub chapters: Vec<Chapter>,
+    /// Optional — older projects deserialise with `audio_tracks = Vec::new()`.
+    #[serde(default, rename = "audioTracks")]
+    pub audio_tracks: Vec<AudioTrack>,
 }
 
 #[cfg(test)]
@@ -106,6 +127,7 @@ mod tests {
                 padding_ms: 80,
             },
             chapters: vec![],
+            audio_tracks: vec![],
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: Project = serde_json::from_str(&json).unwrap();

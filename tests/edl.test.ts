@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  addAudioTrack,
   addMediaWithTranscript,
   computeTimeline,
   deleteWords,
@@ -9,13 +10,16 @@ import {
   newProject,
   nextSurvivingSegment,
   outputTimeToSource,
+  projectAudioTracks,
   projectChapters,
+  removeAudioTrack,
   removeChapter,
   removeSilences,
   renameChapter,
   sourceTimeToOutput,
   splitSegmentAtWord,
   totalDuration,
+  updateAudioTrack,
   wordIdToOutputTime,
   wordIdsInOutputRange,
   type SourceMedia,
@@ -559,6 +563,83 @@ describe("EDL — pure functions", () => {
       const id = projectChapters(p)[0]!.id;
       p = renameChapter(p, id, "   ");
       expect(projectChapters(p)[0]!.title).toBe("Chapter");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Audio tracks (music beds / sfx mixed under the main EDL at export time)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("audio tracks", () => {
+    function seedWithMusic() {
+      const base = newProject("with music");
+      const voice = makeMedia({ id: "voice", path: "/tmp/voice.mp4" });
+      const music = makeMedia({ id: "music", path: "/tmp/song.mp3", duration: 200 });
+      let p = addMediaWithTranscript(base, voice, []);
+      p = {
+        ...p,
+        media: { ...p.media, [music.id]: music },
+      };
+      return p;
+    }
+
+    it("defaults projectAudioTracks to an empty list when missing", () => {
+      const p = newProject("untouched");
+      expect(projectAudioTracks(p)).toEqual([]);
+    });
+
+    it("addAudioTrack stamps an id and clamps gain into a sensible range", () => {
+      const before = seedWithMusic();
+      const after = addAudioTrack(before, {
+        mediaId: "music",
+        gainDb: 999, // clamped to +12 dB ceiling
+        offsetSec: 0,
+        ducks: true,
+      });
+      const tracks = projectAudioTracks(after);
+      expect(tracks.length).toBe(1);
+      expect(tracks[0]!.gainDb).toBe(12);
+      expect(tracks[0]!.ducks).toBe(true);
+      expect(typeof tracks[0]!.id).toBe("string");
+    });
+
+    it("addAudioTrack throws if the mediaId is not in project.media", () => {
+      const before = seedWithMusic();
+      expect(() =>
+        addAudioTrack(before, {
+          mediaId: "missing",
+          gainDb: -6,
+          offsetSec: 0,
+          ducks: false,
+        }),
+      ).toThrow(/unknown media/);
+    });
+
+    it("updateAudioTrack patches fields and re-clamps gain", () => {
+      let p = addAudioTrack(seedWithMusic(), {
+        mediaId: "music",
+        gainDb: -6,
+        offsetSec: 0,
+        ducks: false,
+      });
+      const id = projectAudioTracks(p)[0]!.id;
+      p = updateAudioTrack(p, id, { gainDb: -120, ducks: true, offsetSec: 5 });
+      const t = projectAudioTracks(p)[0]!;
+      expect(t.gainDb).toBe(-60); // floor
+      expect(t.ducks).toBe(true);
+      expect(t.offsetSec).toBe(5);
+    });
+
+    it("removeAudioTrack is a no-op for unknown ids and removes by id", () => {
+      const p = addAudioTrack(seedWithMusic(), {
+        mediaId: "music",
+        gainDb: -6,
+        offsetSec: 0,
+        ducks: false,
+      });
+      expect(removeAudioTrack(p, "no-such-id")).toBe(p);
+      const id = projectAudioTracks(p)[0]!.id;
+      const next = removeAudioTrack(p, id);
+      expect(projectAudioTracks(next)).toEqual([]);
     });
   });
 });

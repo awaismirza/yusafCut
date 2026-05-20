@@ -4,7 +4,6 @@ use crate::edl::{Project, SourceMedia};
 use crate::media::sha256_file;
 use crate::media::parse_ffprobe_json;
 use std::path::Path;
-use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 

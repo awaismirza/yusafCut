@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-05-21
+
+### Added
+- **Smart-cut export.** The exporter now stream-copies the long interior of
+  each EDL segment and only re-encodes a few hundred frames either side of
+  each cut. Typical 30-minute exports finish in seconds instead of minutes.
+  Eligibility falls back to the full re-encode path when the EDL mixes
+  multiple source codecs, requests a resolution / fps / codec change, or the
+  source has no usable keyframes. A "Force full re-encode" toggle in the
+  export dialog lets users opt out.
+- **Background job queue.** Exports, transcriptions, and model downloads
+  now register as cancellable jobs in a queue that persists across app
+  restarts. The new "Jobs" flyout in the StatusBar shows progress, ETA, and
+  errors per job, and a single click cancels the running task.
+- **Multi-track audio with ducking.** A new "Music" panel adds music beds /
+  sfx that the exporter mixes under the main spoken EDL. Each track has its
+  own gain, offset, and an optional sidechain-ducking toggle that drops the
+  music ~12 dB whenever the speaker is talking.
+- **Project snapshots.** Named restore points stored inside the .scribe
+  bundle as gzipped JSON. Survive restarts and travel with the project file.
+  Accessed via the new "Snapshots" toolbar button.
+
+### Changed
+- Export `Codec` selector defaults to "Match source (smart-cut)" so the fast
+  path engages without the user thinking about it; explicit H.264 / HEVC
+  still works and skips smart-cut.
+- Resolution defaults to "Original" so smart-cut isn't disabled by an
+  accidental rescale.
+
 ## [1.3.0] - 2026-05-20
 
 ### Added
