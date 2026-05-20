@@ -125,6 +125,49 @@ export function outputTimeToSource(
   return null;
 }
 
+/** Given a source time, find its output-time position if that source range survived. */
+export function sourceTimeToOutput(
+  project: Project,
+  mediaId: MediaId,
+  sourceTime: number,
+): { segment: Segment; outputTime: number } | null {
+  const timeline = computeTimeline(project);
+  for (const entry of timeline) {
+    if (
+      entry.mediaId === mediaId &&
+      sourceTime >= entry.sourceIn &&
+      sourceTime < entry.sourceOut
+    ) {
+      const segment = project.segments.find((s) => s.id === entry.segmentId);
+      if (!segment) return null;
+      return { segment, outputTime: entry.outputStart + (sourceTime - entry.sourceIn) };
+    }
+  }
+  return null;
+}
+
+/** Map a surviving word id to the output timeline. */
+export function wordIdToOutputTime(
+  project: Project,
+  wordId: string,
+): { word: Word; segment: Segment; outputTime: number; sourceTime: number } | null {
+  const timeline = computeTimeline(project);
+  for (const entry of timeline) {
+    const segment = project.segments.find((s) => s.id === entry.segmentId);
+    if (!segment) continue;
+    const word = segment.words.find((w) => w.id === wordId);
+    if (!word) continue;
+    const sourceTime = Math.max(entry.sourceIn, Math.min(word.start, entry.sourceOut));
+    return {
+      word,
+      segment,
+      sourceTime,
+      outputTime: entry.outputStart + (sourceTime - entry.sourceIn),
+    };
+  }
+  return null;
+}
+
 /** Given a source time within a media file, find the *next* surviving segment
  * for that media (used by the player to skip deleted ranges). Returns null if
  * we're past the last segment for the media. */

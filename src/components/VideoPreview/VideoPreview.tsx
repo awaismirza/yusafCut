@@ -12,7 +12,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   computeTimeline,
   nextSurvivingSegment,
+  outputTimeToSource,
+  sourceTimeToOutput,
   totalDuration,
+  wordIdToOutputTime,
   type Project,
 } from "@/lib/edl";
 import { useProjectStore } from "@/stores/projectStore";
@@ -49,6 +52,7 @@ export function VideoPreview() {
   const muted = usePlayerStore((s) => s.muted);
   const rate = usePlayerStore((s) => s.rate);
   const currentTime = usePlayerStore((s) => s.currentTime);
+  const selectedWordIds = usePlayerStore((s) => s.selectedWordIds);
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
@@ -60,6 +64,7 @@ export function VideoPreview() {
   const mediaPath = firstMediaPath(project);
   const src = mediaPath ? convertFileSrc(mediaPath) : null;
   const outputDuration = totalDuration(project);
+  const hasTranscriptWords = hasWords(project);
 
   // While scrubbing, follow the drag; otherwise follow the player store.
   const displayedProgress = scrubbing
@@ -113,11 +118,18 @@ export function VideoPreview() {
       const el = videoRef.current;
       if (!el) return;
       el.currentTime = ce.detail.start;
+      const firstMediaId = Object.keys(project.media)[0];
+      if (firstMediaId && hasWords(project)) {
+        const mapped = sourceTimeToOutput(project, firstMediaId, ce.detail.start);
+        setCurrentTime(mapped?.outputTime ?? 0);
+      } else {
+        setCurrentTime(ce.detail.start);
+      }
       setPlaying(true);
     };
     window.addEventListener("scribe:seek-source", handler);
     return () => window.removeEventListener("scribe:seek-source", handler);
-  }, [setPlaying]);
+  }, [project, setCurrentTime, setPlaying]);
 
   // ── Time update: skip deleted ranges, update store ────────────────────────
   useEffect(() => {
@@ -188,14 +200,13 @@ export function VideoPreview() {
         return;
       }
 
-      const timeline = computeTimeline(project);
-      for (const entry of timeline) {
-        if (clamped >= entry.outputStart && clamped <= entry.outputEnd) {
-          el.currentTime = entry.sourceIn + (clamped - entry.outputStart);
-          setCurrentTime(clamped);
-          return;
-        }
+      const mapped = outputTimeToSource(project, clamped);
+      if (mapped) {
+        el.currentTime = mapped.sourceTime;
+        setCurrentTime(clamped);
+        return;
       }
+      const timeline = computeTimeline(project);
       if (timeline.length > 0) {
         const last = timeline[timeline.length - 1]!;
         el.currentTime = last.sourceOut;
@@ -204,6 +215,21 @@ export function VideoPreview() {
     },
     [project, outputDuration, setCurrentTime],
   );
+
+  const seekToSelectedWord = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || selectedWordIds.size === 0 || !hasWords(project)) return false;
+    let best: ReturnType<typeof wordIdToOutputTime> = null;
+    for (const id of selectedWordIds) {
+      const mapped = wordIdToOutputTime(project, id);
+      if (!mapped) continue;
+      if (!best || mapped.outputTime < best.outputTime) best = mapped;
+    }
+    if (!best) return false;
+    el.currentTime = best.sourceTime;
+    setCurrentTime(best.outputTime);
+    return true;
+  }, [project, selectedWordIds, setCurrentTime]);
 
   const handleScrubStart = () => {
     setScrubbing(true);
@@ -232,6 +258,15 @@ export function VideoPreview() {
     setRate(RATES[(idx + 1) % RATES.length] ?? 1);
   };
 
+  const handlePlayPause = () => {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    seekToSelectedWord();
+    setPlaying(true);
+  };
+
   // Display duration: use source duration in free-play mode, output duration otherwise
   const [nativeDuration, setNativeDuration] = useState(0);
   useEffect(() => {
@@ -243,7 +278,7 @@ export function VideoPreview() {
     return () => el.removeEventListener("loadedmetadata", onLoaded);
   }, [src]);
 
-  const displayDuration = hasWords(project) ? outputDuration : nativeDuration;
+  const displayDuration = hasTranscriptWords ? outputDuration : nativeDuration;
   const pct = (displayedProgress / 1000) * 100;
 
   // ── No media loaded ───────────────────────────────────────────────────────
@@ -260,13 +295,21 @@ export function VideoPreview() {
     <div className="flex h-full flex-col bg-black">
       {/* Video area */}
       <div className="flex flex-1 items-center justify-center overflow-hidden bg-black">
-        <video
-          ref={videoRef}
-          src={src}
-          className="max-h-full max-w-full object-contain"
-          controls={false}
-          playsInline
-        />
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.06),transparent_48%)]">
+          <video
+            ref={videoRef}
+            src={src}
+            className="max-h-full max-w-full object-contain"
+            controls={false}
+            playsInline
+          />
+          <div className="pointer-events-none absolute left-4 top-4 rounded bg-black/55 px-2 py-1 text-[11px] font-medium text-white/80">
+            Live preview
+          </div>
+          <div className="pointer-events-none absolute right-4 top-4 rounded bg-black/55 px-2 py-1 text-[11px] tabular-nums text-white/75">
+            {formatTimecode(currentTime, { ms: true })}
+          </div>
+        </div>
       </div>
 
       {/* Controls */}
@@ -310,7 +353,7 @@ export function VideoPreview() {
             size="icon"
             variant="ghost"
             className="h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105 transition-transform"
-            onClick={() => setPlaying(!playing)}
+            onClick={handlePlayPause}
             title={playing ? "Pause (Space)" : "Play (Space)"}
           >
             {playing

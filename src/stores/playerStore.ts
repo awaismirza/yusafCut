@@ -27,6 +27,7 @@ interface PlayerState {
   setSelectedWordIds: (ids: Iterable<string>) => void;
   toggleMuted: () => void;
   setRate: (r: number) => void;
+  reset: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set) => ({
@@ -41,4 +42,12 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setSelectedWordIds: (ids) => set({ selectedWordIds: new Set(ids) }),
   toggleMuted: () => set((s) => ({ muted: !s.muted })),
   setRate: (r) => set({ rate: r }),
+  reset: () =>
+    set({
+      currentTime: 0,
+      playing: false,
+      selectedWordIds: new Set(),
+      muted: false,
+      rate: 1.0,
+    }),
 }));

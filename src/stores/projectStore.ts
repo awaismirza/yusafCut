@@ -38,6 +38,7 @@ interface ProjectState {
    *  with `replace`. Returns the count of replacements made. */
   replaceText: (find: string, replace: string, opts?: { caseSensitive?: boolean; wholeWord?: boolean }) => number;
   markSaved: (path: string) => void;
+  closeProject: () => void;
 }
 
 /** Strip surrounding punctuation/whitespace and lowercase. */
@@ -140,6 +141,13 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       markSaved: (path) => set({ dirty: false, filePath: path }),
+
+      closeProject: () =>
+        set({
+          project: newProject("Untitled"),
+          dirty: false,
+          filePath: null,
+        }),
     }),
     {
       // Per spec: cap undo at 50 steps.

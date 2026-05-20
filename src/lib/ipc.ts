@@ -125,6 +125,10 @@ export interface ExportOptions {
   /** Custom preset only — bitrate in kbps. */
   videoBitrateKbps?: number;
   audioBitrateKbps?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  codec?: "h264" | "hevc";
 }
 
 export function exportVideo(opts: ExportOptions): Promise<void> {

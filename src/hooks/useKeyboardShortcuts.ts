@@ -12,6 +12,7 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore, useTemporalProjectStore } from "@/stores/projectStore";
+import { wordIdToOutputTime } from "@/lib/edl";
 
 function isMac() {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -33,6 +34,19 @@ export function useKeyboardShortcuts() {
       if (e.key === " " && !inTextField) {
         e.preventDefault();
         const s = usePlayerStore.getState();
+        if (!s.playing && s.selectedWordIds.size > 0) {
+          const project = useProjectStore.getState().project;
+          let best: ReturnType<typeof wordIdToOutputTime> = null;
+          for (const id of s.selectedWordIds) {
+            const mapped = wordIdToOutputTime(project, id);
+            if (mapped && (!best || mapped.outputTime < best.outputTime)) best = mapped;
+          }
+          if (best) {
+            window.dispatchEvent(
+              new CustomEvent("scribe:seek-source", { detail: { start: best.sourceTime } }),
+            );
+          }
+        }
         s.setPlaying(!s.playing);
         return;
       }
