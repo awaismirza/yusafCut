@@ -20,6 +20,16 @@ export function importMedia(path: string): Promise<SourceMedia> {
   return invoke<SourceMedia>("import_media", { path });
 }
 
+export interface SaveRecordingOptions {
+  bytes: number[];
+  extension: string;
+  prefix: string;
+}
+
+export function saveRecordingFile(opts: SaveRecordingOptions): Promise<string> {
+  return invoke<string>("save_recording_file", { opts });
+}
+
 // ---------------------------------------------------------------------------
 // Transcription
 // ---------------------------------------------------------------------------
@@ -91,9 +101,7 @@ export interface ModelDownloadProgress {
 export function onModelDownloadProgress(
   handler: (p: ModelDownloadProgress) => void,
 ): Promise<UnlistenFn> {
-  return listen<ModelDownloadProgress>("model:download:progress", (e) =>
-    handler(e.payload),
-  );
+  return listen<ModelDownloadProgress>("model:download:progress", (e) => handler(e.payload));
 }
 
 // ---------------------------------------------------------------------------
@@ -143,9 +151,7 @@ export interface ExportProgress {
   etaSec: number | null;
 }
 
-export function onExportProgress(
-  handler: (p: ExportProgress) => void,
-): Promise<UnlistenFn> {
+export function onExportProgress(handler: (p: ExportProgress) => void): Promise<UnlistenFn> {
   return listen<ExportProgress>("export:progress", (e) => handler(e.payload));
 }
 

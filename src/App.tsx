@@ -4,7 +4,6 @@ import { TranscriptEditor } from "@/components/TranscriptEditor/TranscriptEditor
 import { VideoPreview } from "@/components/VideoPreview/VideoPreview";
 import { Waveform } from "@/components/Waveform/Waveform";
 import { StatusBar } from "@/components/StatusBar/StatusBar";
-import { Toolbox } from "@/components/Toolbox/Toolbox";
 import { Toaster } from "@/components/ui/toaster";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAutoSave } from "@/hooks/useAutoSave";
@@ -86,7 +85,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
-      <Toolbar />
+      <Toolbar onFindClick={() => setFindOpen(true)} />
 
       {/*
        * IMPORTANT: keep a single VideoPreview instance across both layouts.
@@ -160,8 +159,7 @@ export default function App() {
 
       {/* Full-width waveform — only when media is loaded */}
       {hasMedia && (
-        <div className="timeline-dock h-[154px] shrink-0 border-t border-border bg-background">
-          <Toolbox onFindClick={() => setFindOpen(true)} />
+        <div className="h-[170px] shrink-0 border-t border-border bg-background">
           <Waveform />
         </div>
       )}

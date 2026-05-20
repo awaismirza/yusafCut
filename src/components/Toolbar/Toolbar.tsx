@@ -19,6 +19,7 @@ import {
   loadProject,
   onModelDownloadProgress,
   saveProject,
+  saveRecordingFile,
   transcribe,
   type ModelInfo,
   type WhisperModel,
@@ -29,11 +30,15 @@ import {
   Download,
   FilePlus2,
   FolderOpen,
+  MonitorUp,
   MicVocal,
   Power,
+  Radio,
   Save,
   Scissors,
   Settings2,
+  Square,
+  Video,
 } from "lucide-react";
 import { formatDuration } from "@/lib/timecode";
 import {
@@ -45,6 +50,7 @@ import {
   type Word,
 } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
+import { Toolbox } from "@/components/Toolbox/Toolbox";
 
 const TRANSCRIPT_CACHE_PREFIX = "scribe.transcript.v1.";
 
@@ -91,7 +97,40 @@ function cacheProjectTranscripts(project: Project) {
   }
 }
 
-export function Toolbar() {
+type RecordingMode = "voiceover" | "screen" | "camera";
+
+interface ToolbarProps {
+  onFindClick?: () => void;
+}
+
+function recordingLabel(mode: RecordingMode) {
+  if (mode === "voiceover") return "Voice over";
+  if (mode === "screen") return "Screen recording";
+  return "Camera recording";
+}
+
+function recordingPrefix(mode: RecordingMode) {
+  if (mode === "voiceover") return "voiceover";
+  if (mode === "screen") return "screen-recording";
+  return "camera-recording";
+}
+
+function recordingMimeType(mode: RecordingMode) {
+  if (mode === "voiceover") {
+    return MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : "audio/webm";
+  }
+  if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
+    return "video/webm;codecs=vp9,opus";
+  }
+  if (MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
+    return "video/webm;codecs=vp8,opus";
+  }
+  return "video/webm";
+}
+
+export function Toolbar({ onFindClick }: ToolbarProps) {
   const project = useProjectStore((s) => s.project);
   const dirty = useProjectStore((s) => s.dirty);
   const filePath = useProjectStore((s) => s.filePath);
@@ -121,12 +160,19 @@ export function Toolbar() {
   // Which model is currently being downloaded inside the dialog, and its progress.
   const [downloadingModel, setDownloadingModel] = useState<WhisperModel | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<RecordingMode>("voiceover");
+  const [recording, setRecording] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState("Ready to record locally");
   const unlistenDownloadRef = useRef<(() => void) | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<BlobPart[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
 
   async function handleOpen() {
     const path = await openDialog({
       multiple: false,
-      filters: [{ name: "Video", extensions: ["mp4", "mov", "m4v", "mkv"] }],
+      filters: [{ name: "Media", extensions: ["mp4", "mov", "m4v", "mkv", "webm", "m4a", "wav"] }],
     });
     if (typeof path !== "string") return;
     setMediaLoading(true);
@@ -164,6 +210,151 @@ export function Toolbar() {
     replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
     resetPlayer();
     pushToast({ title: "Project closed" });
+  }
+
+  async function ensureSelectedModelInstalled() {
+    const info = await listModels();
+    setInstalledModels(info);
+    const installed = info.find((m) => m.name === selectedModel)?.installed ?? false;
+    if (installed) return;
+
+    const modelLabel = MODELS.find((m) => m.name === selectedModel)?.label ?? selectedModel;
+    pushToast({
+      title: `Downloading ${modelLabel}…`,
+      description: "Needed once before local auto-transcription can run.",
+    });
+    await downloadModel(selectedModel);
+    setInstalledModels((prev) =>
+      prev.map((m) => (m.name === selectedModel ? { ...m, installed: true } : m)),
+    );
+  }
+
+  async function importAndTranscribeRecording(path: string, label: string) {
+    setMediaLoading(true);
+    try {
+      const media = await importMedia(path);
+      const name =
+        media.path
+          .split(/[\\/]/)
+          .pop()
+          ?.replace(/\.[^.]+$/, "") || label;
+      const projectWithMedia = buildProjectWithMedia(newProject(name), media, []);
+      resetPlayer();
+      replaceProjectBaseline(projectWithMedia, { dirty: true, filePath: null });
+      pushToast({ title: `${label} saved`, description: media.path });
+
+      await ensureSelectedModelInstalled();
+      const result = await transcribe({
+        mediaId: media.id,
+        mediaPath: media.path,
+        modelName: selectedModel,
+        mediaDuration: media.duration,
+      });
+      writeTranscriptCache(media, result.words);
+      replaceProjectBaseline(
+        {
+          ...projectWithMedia,
+          segments: [
+            {
+              id: crypto.randomUUID(),
+              mediaId: media.id,
+              words: result.words,
+              sourceIn: 0,
+              sourceOut: media.duration,
+            },
+          ],
+          updatedAt: new Date().toISOString(),
+        },
+        { dirty: true, filePath: null },
+      );
+      pushToast({ title: "Recording transcribed", description: `${result.words.length} words` });
+    } catch (err) {
+      pushToast({
+        title: "Recording import/transcription failed",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function startRecording(mode: RecordingMode) {
+    if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
+      pushToast({
+        title: "Recording is not available",
+        description: "This WebView does not expose the browser recording APIs.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRecordingMode(mode);
+    setRecordingStatus("Waiting for macOS permission…");
+
+    try {
+      const stream =
+        mode === "voiceover"
+          ? await navigator.mediaDevices.getUserMedia({ audio: true })
+          : mode === "screen"
+            ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+            : await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+      recordingChunksRef.current = [];
+      recordingStreamRef.current = stream;
+      const mimeType = recordingMimeType(mode);
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+        const label = recordingLabel(mode);
+        setRecordingStatus(`Saving ${label.toLowerCase()}…`);
+        void (async () => {
+          try {
+            const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+            const path = await saveRecordingFile({
+              bytes,
+              extension: "webm",
+              prefix: recordingPrefix(mode),
+            });
+            setRecordingStatus("Transcribing recording…");
+            await importAndTranscribeRecording(path, label);
+            setRecordDialogOpen(false);
+          } finally {
+            recordingChunksRef.current = [];
+            recordingStreamRef.current = null;
+            recorderRef.current = null;
+            setRecording(false);
+            setRecordingStatus("Ready to record locally");
+          }
+        })();
+      };
+
+      recorder.start(1000);
+      setRecording(true);
+      setRecordingStatus(`${recordingLabel(mode)} in progress`);
+    } catch (err) {
+      setRecording(false);
+      setRecordingStatus("Ready to record locally");
+      pushToast({
+        title: "Recording failed to start",
+        description: String(err),
+        variant: "destructive",
+      });
+    }
+  }
+
+  function stopRecording() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    setRecordingStatus("Stopping recording…");
   }
 
   async function refreshModelList() {
@@ -229,6 +420,13 @@ export function Toolbar() {
       setDownloadProgress(0);
     }
   }, [modelDialogOpen]);
+
+  useEffect(() => {
+    return () => {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    };
+  }, []);
 
   async function startTranscribe() {
     setModelDialogOpen(false);
@@ -441,7 +639,17 @@ export function Toolbar() {
           </Button>
         </div>
 
+        <Toolbox onFindClick={onFindClick} />
+
         <div className="tool-group">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button"
+            onClick={() => setRecordDialogOpen(true)}
+          >
+            <Radio className="h-4 w-4" /> Record
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -460,6 +668,83 @@ export function Toolbar() {
           </Button>
         </div>
       </div>
+
+      <Dialog
+        open={recordDialogOpen}
+        onOpenChange={(open) => {
+          if (!recording) setRecordDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Radio className="h-4 w-4 text-primary" />
+              Record locally
+            </DialogTitle>
+            <DialogDescription>
+              Capture voice, screen, or camera media on this Mac. Scribe saves the clip locally,
+              imports it, and transcribes it with Whisper.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={recordingMode === "voiceover" ? "default" : "outline"}
+                className="h-auto flex-col gap-2 py-4"
+                disabled={recording}
+                onClick={() => setRecordingMode("voiceover")}
+              >
+                <MicVocal className="h-5 w-5" />
+                Voice over
+              </Button>
+              <Button
+                variant={recordingMode === "screen" ? "default" : "outline"}
+                className="h-auto flex-col gap-2 py-4"
+                disabled={recording}
+                onClick={() => setRecordingMode("screen")}
+              >
+                <MonitorUp className="h-5 w-5" />
+                Screen
+              </Button>
+              <Button
+                variant={recordingMode === "camera" ? "default" : "outline"}
+                className="h-auto flex-col gap-2 py-4"
+                disabled={recording}
+                onClick={() => setRecordingMode("camera")}
+              >
+                <Video className="h-5 w-5" />
+                Camera
+              </Button>
+            </div>
+
+            <div className="rounded-md border border-border bg-secondary/45 px-3 py-2 text-sm text-muted-foreground">
+              {recordingStatus}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRecordDialogOpen(false)}
+              disabled={recording}
+            >
+              Cancel
+            </Button>
+            {recording ? (
+              <Button variant="destructive" className="gap-2" onClick={stopRecording}>
+                <Square className="h-4 w-4" />
+                Stop recording
+              </Button>
+            ) : (
+              <Button className="gap-2" onClick={() => void startRecording(recordingMode)}>
+                <Radio className="h-4 w-4" />
+                Start {recordingLabel(recordingMode)}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
         <DialogContent className="max-w-md">
