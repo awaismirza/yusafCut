@@ -309,13 +309,13 @@ export function VideoPreview() {
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-white hover:bg-white/10"
+            className="h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105 transition-transform"
             onClick={() => setPlaying(!playing)}
             title={playing ? "Pause (Space)" : "Play (Space)"}
           >
             {playing
-              ? <Pause className="h-4 w-4 fill-white stroke-none" />
-              : <Play className="h-4 w-4 fill-white stroke-none" />}
+              ? <Pause className="h-4 w-4 fill-current stroke-none" />
+              : <Play className="h-4 w-4 fill-current stroke-none" />}
           </Button>
 
           <Button

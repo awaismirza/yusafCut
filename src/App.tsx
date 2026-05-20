@@ -3,6 +3,7 @@ import { Toolbar } from "@/components/Toolbar/Toolbar";
 import { TranscriptEditor } from "@/components/TranscriptEditor/TranscriptEditor";
 import { VideoPreview } from "@/components/VideoPreview/VideoPreview";
 import { Waveform } from "@/components/Waveform/Waveform";
+import { StatusBar } from "@/components/StatusBar/StatusBar";
 import { Toaster } from "@/components/ui/toaster";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAutoSave } from "@/hooks/useAutoSave";
@@ -168,6 +169,8 @@ export default function App() {
           <Waveform />
         </div>
       )}
+
+      <StatusBar />
 
       <Toaster />
     </div>

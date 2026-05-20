@@ -22,24 +22,45 @@
     --radius: 0.5rem;
   }
 
-  /* ── Professional dark theme ─────────────────────────────────────────── */
+  /* ── Scribe Editor design tokens — warm-neutral dark + teal accent ────
+     Ported from the claude.ai/design handoff. HSL approximations of the
+     original oklch values, chosen so the existing shadcn components keep
+     working but the look matches the design.                             */
   [data-theme="dark"],
   .dark {
-    --background: 228 16% 7%;          /* #0c0d14 — deep blue-black */
-    --foreground: 220 14% 91%;         /* #e3e4ef */
-    --primary: 220 14% 91%;
-    --primary-foreground: 228 16% 7%;
-    --secondary: 228 12% 13%;          /* #1a1b24 */
-    --secondary-foreground: 220 14% 91%;
-    --muted: 228 12% 12%;              /* #181920 */
-    --muted-foreground: 220 8% 52%;    /* #80818f */
-    --accent: 228 12% 16%;             /* #21222e — hover bg */
-    --accent-foreground: 220 14% 91%;
-    --destructive: 0 58% 32%;
+    --background: 30 4% 12%;           /* warm near-black window bg */
+    --foreground: 30 5% 96%;           /* primary text */
+    --primary: 188 60% 55%;            /* teal/cyan accent */
+    --primary-foreground: 195 30% 12%;
+    --secondary: 30 4% 16%;            /* panels */
+    --secondary-foreground: 30 5% 96%;
+    --muted: 30 4% 16%;
+    --muted-foreground: 30 4% 58%;     /* tertiary */
+    --accent: 30 4% 21%;               /* hover bg */
+    --accent-foreground: 30 5% 96%;
+    --destructive: 18 70% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 228 12% 15%;             /* #1e1f2c */
-    --input: 228 12% 15%;
-    --ring: 220 10% 68%;
+    --border: 30 4% 24%;
+    --input: 30 4% 24%;
+    --ring: 188 60% 55%;
+
+    /* Scribe semantic tokens (not part of shadcn's set) */
+    --filler: 42 70% 65%;              /* amber — filler word highlight */
+    --filler-strong: 42 70% 58%;
+    --delete: 18 70% 55%;              /* red — deleted regions */
+    --speaker-a: 200 60% 68%;          /* light teal */
+    --speaker-b: 18 65% 68%;           /* warm coral */
+    --pulse: 145 55% 56%;              /* green privacy indicator */
+  }
+
+  :root {
+    /* Same tokens for light mode (fallbacks; the app is dark-themed) */
+    --filler: 42 80% 50%;
+    --filler-strong: 42 90% 45%;
+    --delete: 18 75% 50%;
+    --speaker-a: 200 70% 45%;
+    --speaker-b: 18 75% 50%;
+    --pulse: 145 60% 40%;
   }
 
   * { @apply border-border; }
@@ -70,9 +91,9 @@
 }
 
 /* ProseMirror root — comfortable reading column with room on the left for
-   the floating timestamp chip column. */
+   the floating speaker + timestamp chip column. */
 .transcript-editor {
-  padding: 2.5rem 2.75rem 6rem 6.5rem;
+  padding: 2.5rem 2.75rem 6rem 7.75rem;
   max-width: 880px;
   margin: 0 auto;
   font-size: 16.5px;
@@ -102,22 +123,52 @@
   background-color: hsl(var(--accent));
 }
 
-/* Currently-playing word — amber glow */
+/* Currently-playing word — teal accent (matches design playhead) */
 .transcript-editor .word.is-playing {
-  background-color: hsl(42 90% 52% / 0.22);
-  color: hsl(38 85% 62%);
+  background-color: hsl(var(--primary) / 0.22);
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 0 hsl(var(--primary));
   border-radius: 3px;
 }
-[data-theme="dark"] .transcript-editor .word.is-playing {
-  background-color: hsl(42 85% 55% / 0.20);
-  color: hsl(44 90% 72%);
+
+/* Filler words — amber highlight + hover-X to delete in one click */
+.transcript-editor .word.is-filler {
+  color: hsl(var(--filler));
+  background-color: hsl(var(--filler) / 0.16);
+  box-shadow: inset 0 0 0 1px hsl(var(--filler) / 0.40);
+  border-radius: 3px;
+}
+.transcript-editor .word.is-filler:hover {
+  background-color: hsl(var(--filler) / 0.32);
+}
+.transcript-editor .word.is-filler .filler-x {
+  display: none;
+  margin-left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: hsl(var(--delete));
+  color: hsl(30 5% 10%);
+  font: 700 9px/14px ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+  vertical-align: 1px;
+  cursor: pointer;
+  user-select: none;
+  border: 0;
+  padding: 0;
+}
+.transcript-editor .word.is-filler:hover .filler-x {
+  display: inline-block;
 }
 
 /* Deleted words */
 .transcript-editor .word.is-deleted {
   text-decoration: line-through;
+  text-decoration-color: hsl(var(--delete));
+  text-decoration-thickness: 1.5px;
   color: hsl(var(--muted-foreground));
   opacity: 0.55;
+  background-color: hsl(var(--delete) / 0.06);
 }
 
 /* Low-confidence words — subtle wavy underline */
@@ -235,4 +286,99 @@
   height: 4px;
   border-radius: 9999px;
   background: rgba(255,255,255,0.12);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PARAGRAPH SPEAKER CHIP — sits next to the timestamp chip
+   ════════════════════════════════════════════════════════════════════════ */
+.paragraph-speaker-chip {
+  position: absolute;
+  left: 1.25rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 0.15em;
+  height: 1.6em;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.paragraph-speaker-chip .name { font-weight: 600; }
+.paragraph-speaker-chip .ts {
+  font: 500 10.5px/1 ui-monospace, 'Cascadia Code', monospace;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.paragraph-speaker-chip[data-speaker="A"] .name { color: hsl(var(--speaker-a)); }
+.paragraph-speaker-chip[data-speaker="B"] .name { color: hsl(var(--speaker-b)); }
+.paragraph-speaker-chip[data-speaker="default"] .name { color: hsl(var(--muted-foreground)); }
+.paragraph-speaker-chip:hover .ts { color: hsl(var(--foreground)); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   STATUS BAR — bottom of the window (model, counts, timecode)
+   ════════════════════════════════════════════════════════════════════════ */
+.scribe-statusbar {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 14px;
+  background: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border));
+  font: 500 11px/1 ui-monospace, 'Cascadia Code', monospace;
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.scribe-statusbar > * { flex-shrink: 0; }
+.scribe-statusbar .sep { opacity: 0.5; }
+.scribe-statusbar .spacer { flex: 1; }
+.scribe-statusbar .chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: hsl(var(--foreground));
+}
+.scribe-statusbar .chip .pulse {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: hsl(var(--pulse));
+  box-shadow: 0 0 5px hsl(var(--pulse) / 0.7);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TRANSCRIPT TOOLBAR — "Remove fillers" / "Restore" buttons above the editor
+   ════════════════════════════════════════════════════════════════════════ */
+.transcript-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.transcript-toolbar .label {
+  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.transcript-toolbar .count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px;
+  background: hsl(var(--filler) / 0.16);
+  color: hsl(var(--filler));
+  font: 600 10.5px/1 ui-monospace, monospace;
+  margin-left: 6px;
+  border: 1px solid hsl(var(--filler) / 0.40);
 }
