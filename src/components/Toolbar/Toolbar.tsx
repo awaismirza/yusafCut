@@ -999,11 +999,29 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Progress indeterminate />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Whisper running locally</span>
-              <span>{(transcribeProgress ?? 0) > 0.05 ? "Decoding audio" : "Starting"}</span>
-            </div>
+            {/*
+             * Same two-phase pattern as export:
+             *  transcribeProgress === 0  → Whisper model is loading / audio is being decoded,
+             *                              no meaningful % yet — show indeterminate bar.
+             *  transcribeProgress  > 0  → Whisper is actively transcribing; show real %.
+             */}
+            {(transcribeProgress ?? 0) > 0 ? (
+              <>
+                <Progress value={(transcribeProgress ?? 0) * 100} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Whisper running locally</span>
+                  <span>{Math.round((transcribeProgress ?? 0) * 100)}%</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Progress indeterminate />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Whisper running locally</span>
+                  <span>Loading model…</span>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1041,11 +1059,31 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Progress value={(exportingProgress ?? 0) * 100} />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Writing .mp4</span>
-              <span>{Math.round((exportingProgress ?? 0) * 100)}%</span>
-            </div>
+            {/*
+             * Two-phase progress UI:
+             *  exportingProgress === 0  → ffmpeg is initialising (no frames encoded yet),
+             *                             show an indeterminate "running" bar with no %.
+             *  exportingProgress  > 0  → real frame data is flowing; switch to a
+             *                             determinate bar so the user can see how far along
+             *                             the render is.
+             */}
+            {(exportingProgress ?? 0) > 0 ? (
+              <>
+                <Progress value={(exportingProgress ?? 0) * 100} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Writing .mp4</span>
+                  <span>{Math.round((exportingProgress ?? 0) * 100)}%</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Progress indeterminate />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Preparing export…</span>
+                  <span>Starting ffmpeg</span>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
