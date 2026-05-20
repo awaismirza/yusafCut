@@ -58,6 +58,14 @@ interface ProjectState {
   addChapter: (outputTime: number, title?: string) => void;
   removeChapter: (id: string) => void;
   renameChapter: (id: string, title: string) => void;
+  /**
+   * Bulk-replace all chapters with an AI-generated set.
+   *
+   * Each entry needs only `title` and `outputTime`; stable UUIDs are assigned
+   * here. The existing chapter list is replaced, not merged, so the user gets
+   * a clean slate they can edit from.
+   */
+  setChapters: (chapters: Array<{ title: string; outputTime: number }>) => void;
   /** Audio-track ops (music beds / sfx mixed under the main EDL). */
   addAudioTrack: (track: Omit<AudioTrack, "id">) => void;
   removeAudioTrack: (id: string) => void;
@@ -196,6 +204,19 @@ export const useProjectStore = create<ProjectState>()(
         set((s) => ({ project: removeChapter(s.project, id), dirty: true })),
       renameChapter: (id, title) =>
         set((s) => ({ project: renameChapter(s.project, id, title), dirty: true })),
+      setChapters: (chapters) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            chapters: chapters.map((c) => ({
+              id: crypto.randomUUID(),
+              title: c.title,
+              outputTime: c.outputTime,
+            })),
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
 
       addAudioTrack: (track) =>
         set((s) => ({ project: addAudioTrack(s.project, track), dirty: true })),

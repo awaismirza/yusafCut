@@ -28,6 +28,14 @@ export function writeTranscriptCache(media: SourceMedia, words: Word[]) {
   }
 }
 
+export function clearTranscriptCache(media: SourceMedia) {
+  try {
+    localStorage.removeItem(transcriptCacheKey(media));
+  } catch {
+    // Cache failure should never block editing.
+  }
+}
+
 export function cacheProjectTranscripts(project: Project) {
   for (const media of Object.values(project.media)) {
     const words = project.segments

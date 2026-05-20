@@ -46,6 +46,10 @@ pub enum JobKind {
     Transcribe,
     DownloadModel,
     Snapshot,
+    /// On-device LLM inference — chapter detection.
+    DetectChapters,
+    /// On-device LLM inference — b-roll suggestion for a timeline span.
+    SuggestBroll,
 }
 
 impl JobKind {
@@ -55,6 +59,8 @@ impl JobKind {
             JobKind::Transcribe => "transcribe",
             JobKind::DownloadModel => "download-model",
             JobKind::Snapshot => "snapshot",
+            JobKind::DetectChapters => "detect-chapters",
+            JobKind::SuggestBroll => "suggest-broll",
         }
     }
 }

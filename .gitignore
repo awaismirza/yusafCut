@@ -18,6 +18,10 @@ src-tauri/target/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 !src-tauri/binaries/README.md
+!src-tauri/binaries/fetch.sh
+# Dev-stub shell scripts — committed so `cargo build` never fails on a clean clone
+!src-tauri/binaries/mlx-sidecar-aarch64-apple-darwin
+!src-tauri/binaries/whisperkit-cli-aarch64-apple-darwin
 
 # Logs
 *.log
@@ -34,9 +38,10 @@ coverage/
 *.app
 *.app.tar.gz
 
-# Sidecar build outputs
+# Sidecar build outputs + venv
 sidecars/**/dist/
 sidecars/**/build/
+sidecars/**/.venv/
 sidecars/**/__pycache__/
 sidecars/**/*.egg-info/
 

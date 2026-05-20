@@ -1,14 +1,13 @@
 //! Scribe backend — Tauri-side glue and command handlers.
 //!
-//! Everything that talks to whisper.cpp, ffmpeg, the filesystem, or the MLX
-//! sidecar lives in this crate. The frontend communicates via Tauri commands
-//! declared in `commands::*`.
+//! Everything that talks to whisper.cpp, WhisperKit, ffmpeg, the filesystem,
+//! or the MLX-LLM sidecar lives in this crate. The frontend communicates via
+//! Tauri commands declared in `commands::*`.
 
 pub mod commands;
 pub mod edl;
 pub mod export_state;
 pub mod jobs;
-#[cfg(feature = "mlx-sidecar")]
 pub mod llm;
 pub mod media;
 pub mod project;
@@ -23,6 +22,8 @@ pub struct AppState {
     pub export: export_state::ExportState,
     pub recording: recording_state::RecordingState,
     pub jobs: jobs::JobQueue,
+    /// Lazily-spawned MLX-LLM sidecar for on-device AI features.
+    pub llm: llm::LlmSidecar,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,6 +42,8 @@ pub fn run() {
             commands::transcribe::transcribe,
             commands::transcribe::list_models,
             commands::transcribe::download_model,
+            commands::llm::detect_chapters,
+            commands::llm::suggest_broll,
             commands::project::save_project,
             commands::project::load_project,
             commands::project::relink_media,

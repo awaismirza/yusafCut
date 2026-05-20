@@ -6,6 +6,9 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
+    "setup:all": "bash scripts/setup.sh",
+    "dev:full": "bash scripts/dev.sh",
+    "dev:sidecar": "bash scripts/sidecar-dev.sh",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
@@ -21,9 +24,16 @@
     "fresh:build": "npm install && tauri build",
     "lint": "eslint src --ext .ts,.tsx --max-warnings=0",
     "typecheck": "tsc -b --noEmit",
+    "check": "npm run typecheck && npm run lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "test:rust": "cd src-tauri && cargo test",
+    "test:sidecar": "cd sidecars/mlx-llm && .venv/bin/python -m pytest tests/ -v",
+    "test:all": "npm run test && npm run test:rust && npm run test:sidecar",
+    "sidecar:setup": "python3 -m venv sidecars/mlx-llm/.venv && sidecars/mlx-llm/.venv/bin/pip install -e sidecars/mlx-llm",
+    "sidecar:build": "python sidecars/mlx-llm/build.py",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "ci": "npm run check && npm run test && npm run test:rust && npm run test:sidecar"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

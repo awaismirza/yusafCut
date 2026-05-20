@@ -1,5 +1,6 @@
 pub mod export;
 pub mod jobs;
+pub mod llm;
 pub mod media;
 pub mod misc;
 pub mod project;
