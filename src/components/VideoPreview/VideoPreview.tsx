@@ -1,15 +1,11 @@
 /**
  * Video preview panel with full playback controls.
  *
- * Controls provided:
- *   - Scrubber (output-time progress bar)
- *   - Skip ±5 s
- *   - Play / Pause
- *   - Current time / duration
- *   - Playback rate cycle
- *   - Mute toggle
- *
- * Seeking from the transcript (scribe:seek-source) automatically starts playback.
+ * Key behaviours:
+ *  - When there are no transcribed words yet the video plays freely (no EDL constraints).
+ *  - Seeking from transcript/waveform (scribe:seek-source) calls el.play() directly to
+ *    avoid the React-state → effect cycle race condition.
+ *  - Scrubber shows output-time progress; skip ±5 s; playback rate cycle; mute toggle.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -41,6 +37,11 @@ function firstMediaPath(project: Project): string | null {
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
+/** True when the project has at least one segment with transcribed words. */
+function hasWords(project: Project) {
+  return project.segments.some((s) => s.words.length > 0);
+}
+
 export function VideoPreview() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const project = useProjectStore((s) => s.project);
@@ -53,8 +54,6 @@ export function VideoPreview() {
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const setRate = usePlayerStore((s) => s.setRate);
 
-  // Track whether the user is actively dragging the scrubber so we don't
-  // fight the timeupdate loop while they scrub.
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
 
@@ -62,15 +61,14 @@ export function VideoPreview() {
   const src = mediaPath ? convertFileSrc(mediaPath) : null;
   const outputDuration = totalDuration(project);
 
-  // The displayed progress fraction (0-1000) — while scrubbing, follow the
-  // drag; otherwise follow the player store.
+  // While scrubbing, follow the drag; otherwise follow the player store.
   const displayedProgress = scrubbing
     ? scrubValue
     : outputDuration > 0
       ? Math.round((currentTime / outputDuration) * 1000)
       : 0;
 
-  // ── Drive play/pause from store ──────────────────────────────────────────
+  // ── Drive play/pause state from store ────────────────────────────────────
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
@@ -88,15 +86,26 @@ export function VideoPreview() {
     if (el) el.playbackRate = rate;
   }, [rate]);
 
-  // ── Seek from transcript / waveform click → also start playing ────────────
+  // ── Seek from transcript / waveform → play immediately ───────────────────
+  // We call el.play() directly here rather than going through setPlaying(true)
+  // to avoid a race where React hasn't re-rendered yet when play() is needed.
   useEffect(() => {
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ start: number }>;
       const el = videoRef.current;
       if (!el) return;
       el.currentTime = ce.detail.start;
-      // Auto-start playback so the user doesn't have to press play separately.
-      setPlaying(true);
+      void el
+        .play()
+        .then(() => setPlaying(true))
+        .catch(() => {
+          // Interrupted (e.g. another seek queued) — try once after the seeked event.
+          el.addEventListener(
+            "seeked",
+            () => void el.play().then(() => setPlaying(true)).catch(() => {}),
+            { once: true },
+          );
+        });
     };
     window.addEventListener("scribe:seek-source", handler);
     return () => window.removeEventListener("scribe:seek-source", handler);
@@ -111,6 +120,15 @@ export function VideoPreview() {
       if (!el || scrubbing) return;
       const ids = Object.keys(project.media);
       if (ids.length === 0) return;
+
+      // ── Free-play mode: no EDL constraints when there are no transcribed words ──
+      // This handles both the "no transcript yet" state and the case where all
+      // words have been deleted.
+      if (!hasWords(project)) {
+        setCurrentTime(el.currentTime);
+        return;
+      }
+
       const mediaId = ids[0]!;
       const srcTime = el.currentTime;
       const timeline = computeTimeline(project);
@@ -125,6 +143,7 @@ export function VideoPreview() {
         return;
       }
 
+      // In a deleted range → jump to next surviving segment.
       const next = nextSurvivingSegment(project, mediaId, srcTime);
       if (next) {
         el.currentTime = next.sourceIn;
@@ -147,12 +166,20 @@ export function VideoPreview() {
     };
   }, [project, setCurrentTime, setPlaying, scrubbing]);
 
-  // ── Seek helpers ─────────────────────────────────────────────────────────
+  // ── Output-time seek helpers ──────────────────────────────────────────────
   const seekToOutputTime = useCallback(
     (targetOutput: number) => {
       const el = videoRef.current;
       if (!el) return;
-      const clamped = Math.max(0, Math.min(targetOutput, outputDuration));
+      const clamped = Math.max(0, Math.min(targetOutput, outputDuration || el.duration || 0));
+
+      // Free-play mode: output time === source time.
+      if (!hasWords(project)) {
+        el.currentTime = clamped;
+        setCurrentTime(clamped);
+        return;
+      }
+
       const timeline = computeTimeline(project);
       for (const entry of timeline) {
         if (clamped >= entry.outputStart && clamped <= entry.outputEnd) {
@@ -161,7 +188,6 @@ export function VideoPreview() {
           return;
         }
       }
-      // Past the last segment — jump to its end
       if (timeline.length > 0) {
         const last = timeline[timeline.length - 1]!;
         el.currentTime = last.sourceOut;
@@ -182,40 +208,50 @@ export function VideoPreview() {
 
   const handleScrubEnd = (e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>) => {
     const fraction = Number((e.currentTarget as HTMLInputElement).value) / 1000;
-    seekToOutputTime(fraction * outputDuration);
+    // Use source duration when there are no EDL words yet
+    const dur = hasWords(project) ? outputDuration : (videoRef.current?.duration ?? 0);
+    seekToOutputTime(fraction * dur);
     setScrubbing(false);
   };
 
   const handleSkip = useCallback(
-    (delta: number) => {
-      seekToOutputTime(currentTime + delta);
-    },
+    (delta: number) => seekToOutputTime(currentTime + delta),
     [seekToOutputTime, currentTime],
   );
 
   const cycleRate = () => {
     const idx = RATES.indexOf(rate as (typeof RATES)[number]);
-    const next = RATES[(idx + 1) % RATES.length] ?? 1;
-    setRate(next);
+    setRate(RATES[(idx + 1) % RATES.length] ?? 1);
   };
 
-  // ── Empty state ──────────────────────────────────────────────────────────
+  // Display duration: use source duration in free-play mode, output duration otherwise
+  const [nativeDuration, setNativeDuration] = useState(0);
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const onLoaded = () => setNativeDuration(el.duration || 0);
+    el.addEventListener("loadedmetadata", onLoaded);
+    if (el.duration) setNativeDuration(el.duration);
+    return () => el.removeEventListener("loadedmetadata", onLoaded);
+  }, [src]);
+
+  const displayDuration = hasWords(project) ? outputDuration : nativeDuration;
+  const pct = (displayedProgress / 1000) * 100;
+
+  // ── No media loaded ───────────────────────────────────────────────────────
   if (!src) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-black text-white/30">
-        <Play className="h-10 w-10 opacity-20" />
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-black text-white/25">
+        <Play className="h-12 w-12" strokeWidth={1} />
         <p className="text-sm">No media loaded</p>
-        <p className="text-xs opacity-60">Open a video to get started</p>
       </div>
     );
   }
 
-  const pct = (displayedProgress / 1000) * 100;
-
   return (
     <div className="flex h-full flex-col bg-black">
-      {/* ── Video area ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 items-center justify-center overflow-hidden">
+      {/* Video area */}
+      <div className="flex flex-1 items-center justify-center overflow-hidden bg-black">
         <video
           ref={videoRef}
           src={src}
@@ -225,12 +261,14 @@ export function VideoPreview() {
         />
       </div>
 
-      {/* ── Controls ───────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-1.5 border-t border-white/10 bg-zinc-950 px-3 pb-3 pt-2">
+      {/* Controls */}
+      <div className="flex flex-col gap-2 border-t border-white/[0.08] bg-zinc-950 px-3 pb-3 pt-2.5">
+
         {/* Scrubber */}
-        <div className="group relative flex items-center">
+        <div className="relative flex items-center">
+          {/* Filled track */}
           <div
-            className="pointer-events-none absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-l-full bg-white/80"
+            className="pointer-events-none absolute left-0 h-1 rounded-l-full bg-white/70"
             style={{ width: `${pct}%` }}
           />
           <input
@@ -250,18 +288,16 @@ export function VideoPreview() {
 
         {/* Button row */}
         <div className="flex items-center gap-0.5">
-          {/* Skip back */}
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-white/60 hover:bg-white/10 hover:text-white"
+            className="h-7 w-7 text-white/50 hover:bg-white/10 hover:text-white"
             onClick={() => handleSkip(-5)}
-            title="Back 5 s"
+            title="Back 5 s (←)"
           >
             <SkipBack className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Play / Pause */}
           <Button
             size="icon"
             variant="ghost"
@@ -269,57 +305,47 @@ export function VideoPreview() {
             onClick={() => setPlaying(!playing)}
             title={playing ? "Pause (Space)" : "Play (Space)"}
           >
-            {playing ? (
-              <Pause className="h-4 w-4 fill-white" />
-            ) : (
-              <Play className="h-4 w-4 fill-white" />
-            )}
+            {playing
+              ? <Pause className="h-4 w-4 fill-white stroke-none" />
+              : <Play className="h-4 w-4 fill-white stroke-none" />}
           </Button>
 
-          {/* Skip forward */}
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-white/60 hover:bg-white/10 hover:text-white"
+            className="h-7 w-7 text-white/50 hover:bg-white/10 hover:text-white"
             onClick={() => handleSkip(5)}
-            title="Forward 5 s"
+            title="Forward 5 s (→)"
           >
             <SkipForward className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Time display */}
-          <span className="ml-1.5 select-none text-xs tabular-nums text-white/50">
+          <span className="ml-1.5 select-none text-xs tabular-nums text-white/40">
             {formatDuration(currentTime)}
-            <span className="mx-0.5 text-white/25">/</span>
-            {formatDuration(outputDuration)}
+            <span className="mx-1 text-white/20">/</span>
+            {formatDuration(displayDuration)}
           </span>
 
-          {/* Right side */}
           <div className="ml-auto flex items-center gap-0.5">
-            {/* Rate */}
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 min-w-[36px] px-1.5 text-xs tabular-nums text-white/50 hover:bg-white/10 hover:text-white"
+              className="h-7 min-w-[34px] px-1.5 text-xs tabular-nums text-white/40 hover:bg-white/10 hover:text-white"
               onClick={cycleRate}
               title="Playback speed"
             >
               {rate === 1 ? "1×" : `${rate}×`}
             </Button>
-
-            {/* Mute */}
             <Button
               size="icon"
               variant="ghost"
-              className="h-7 w-7 text-white/60 hover:bg-white/10 hover:text-white"
+              className="h-7 w-7 text-white/50 hover:bg-white/10 hover:text-white"
               onClick={toggleMuted}
               title={muted ? "Unmute" : "Mute"}
             >
-              {muted ? (
-                <VolumeX className="h-3.5 w-3.5" />
-              ) : (
-                <Volume2 className="h-3.5 w-3.5" />
-              )}
+              {muted
+                ? <VolumeX className="h-3.5 w-3.5" />
+                : <Volume2 className="h-3.5 w-3.5" />}
             </Button>
           </div>
         </div>
