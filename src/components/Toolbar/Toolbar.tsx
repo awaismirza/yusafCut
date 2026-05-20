@@ -77,11 +77,11 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
 ];
 
 const WK_MODELS: { name: WhisperKitModel; label: string; sizeMb: number }[] = [
-  { name: "openai_whisper-tiny", label: "Tiny (~95 MB)", sizeMb: 95 },
+  { name: "openai_whisper-tiny", label: "Tiny (~77 MB)", sizeMb: 77 },
   { name: "openai_whisper-base", label: "Base (~190 MB)", sizeMb: 190 },
   { name: "openai_whisper-small", label: "Small (~640 MB)", sizeMb: 640 },
   { name: "openai_whisper-large-v3-turbo", label: "Large v3 Turbo · ANE (recommended)", sizeMb: 1700 },
-  { name: "openai_whisper-large-v3", label: "Large v3 · ANE (highest accuracy)", sizeMb: 3900 },
+  { name: "openai_whisper-large-v3", label: "Large v3 · ANE (highest accuracy)", sizeMb: 3090 },
 ];
 
 /** ISO 639-1 languages Whisper supports well. */
