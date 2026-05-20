@@ -9,12 +9,15 @@ export type Toast = {
   variant?: "default" | "destructive";
 };
 
+export type EditorTool = "select" | "razor" | "slip" | "slide";
+
 interface UIState {
   toasts: Toast[];
   exportingProgress: number | null;
   modelDownloadProgress: number | null;
   transcribeProgress: number | null;
   mediaLoading: boolean;
+  activeTool: EditorTool;
 
   pushToast: (t: Omit<Toast, "id">) => void;
   dismissToast: (id: string) => void;
@@ -23,6 +26,7 @@ interface UIState {
   setModelDownloadProgress: (p: number | null) => void;
   setTranscribeProgress: (p: number | null) => void;
   setMediaLoading: (loading: boolean) => void;
+  setActiveTool: (tool: EditorTool) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -31,6 +35,7 @@ export const useUIStore = create<UIState>((set) => ({
   modelDownloadProgress: null,
   transcribeProgress: null,
   mediaLoading: false,
+  activeTool: "select",
 
   pushToast: (t) =>
     set((s) => ({
@@ -45,4 +50,5 @@ export const useUIStore = create<UIState>((set) => ({
   setModelDownloadProgress: (p) => set({ modelDownloadProgress: p }),
   setTranscribeProgress: (p) => set({ transcribeProgress: p }),
   setMediaLoading: (loading) => set({ mediaLoading: loading }),
+  setActiveTool: (tool) => set({ activeTool: tool }),
 }));

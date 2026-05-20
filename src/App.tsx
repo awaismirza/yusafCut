@@ -4,6 +4,7 @@ import { TranscriptEditor } from "@/components/TranscriptEditor/TranscriptEditor
 import { VideoPreview } from "@/components/VideoPreview/VideoPreview";
 import { Waveform } from "@/components/Waveform/Waveform";
 import { StatusBar } from "@/components/StatusBar/StatusBar";
+import { Toolbox } from "@/components/Toolbox/Toolbox";
 import { Toaster } from "@/components/ui/toaster";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAutoSave } from "@/hooks/useAutoSave";
@@ -85,6 +86,8 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       <Toolbar />
+
+      {hasMedia && <Toolbox />}
 
       {/*
        * IMPORTANT: keep a single VideoPreview instance across both layouts.

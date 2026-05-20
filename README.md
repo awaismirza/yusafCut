@@ -8,21 +8,22 @@ Delete words, the corresponding video disappears. Reorder paragraphs, the video
 reorders. Everything runs 100% locally using your Mac's CPU/GPU/Neural Engine
 — no cloud, no telemetry, no API keys required.
 
-This is a v0.1 MVP scaffold. See [`scribe-spec.md`](../scribe-spec.md) for the
-full design document.
+Scribe 1.0.0 is MVP ready for local-first transcript editing, timeline preview,
+and MP4 export on Apple Silicon Macs. See [`scribe-spec.md`](scribe-spec.md) for
+the full design document.
 
 ## Status
 
 | Phase | Description | State |
 |-------|-------------|-------|
-| 0 | Project scaffolding | ✅ scaffolded |
-| 1 | Media import + FFprobe | 🚧 commands in place; binary not bundled |
-| 2 | Whisper transcription | 🚧 commands in place; binary not bundled |
+| 0 | Project scaffolding | ✅ complete |
+| 1 | Media import + FFprobe | ✅ MVP ready |
+| 2 | Whisper transcription | ✅ MVP ready with local sidecar |
 | 3 | Transcript editor UI | ✅ TipTap + Word node implemented |
 | 4 | Edit operations | ✅ EDL helpers + delete pipeline |
 | 5 | Project save/load | ✅ atomic .scribe bundle round-trip |
-| 6 | Export | 🚧 ffmpeg filter graph built; binary not bundled |
-| 7 | Polish (icons, notarisation, auto-update) | ⏳ |
+| 6 | Export | ✅ MVP ready |
+| 7 | Polish (icons, notarisation, auto-update) | ⏳ post-1.0 |
 
 "Binary not bundled" means the Rust command code is in place but the actual
 sidecar binaries (`whisper-cli`, `ffmpeg`, `ffprobe`) must be obtained
