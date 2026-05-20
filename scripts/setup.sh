@@ -127,13 +127,13 @@ download_ffmpeg "ffmpeg"  "https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip"  "$FFMPEG"
 download_ffmpeg "ffprobe" "https://evermeet.cx/ffmpeg/ffprobe-7.1.zip" "$FFPROBE" "ffprobe.zip"
 
 # ── 5. whisper-cli ────────────────────────────────────────────────────────────
-header "5 / 6  whisper-cli"
+header "5 / 7  whisper-cli"
 WHISPER="$BINS/whisper-cli-$ARCH_SUFFIX"
 if [[ -f "$WHISPER" ]] && [[ -x "$WHISPER" ]]; then
   WSIZE=$(du -sh "$WHISPER" 2>/dev/null | awk '{print $1}')
   ok "whisper-cli present (${WSIZE})"
 else
-  warn "whisper-cli not found — transcription will not work."
+  warn "whisper-cli not found — whisper.cpp transcription will not work."
   echo ""
   echo "      Build it from source (5–10 min):"
   echo "      ┌─────────────────────────────────────────────────────────┐"
@@ -144,8 +144,31 @@ else
   echo "      └─────────────────────────────────────────────────────────┘"
 fi
 
-# ── 6. MLX sidecar binary ─────────────────────────────────────────────────────
-header "6 / 6  MLX sidecar binary"
+# ── 6. whisperkit-cli ─────────────────────────────────────────────────────────
+header "6 / 7  whisperkit-cli (WhisperKit ANE)"
+WHISPERKIT="$BINS/whisperkit-cli-$ARCH_SUFFIX"
+_wk_is_stub() {
+  [[ -f "$WHISPERKIT" ]] && head -1 "$WHISPERKIT" 2>/dev/null | grep -q "^#!"
+}
+if [[ -f "$WHISPERKIT" ]] && [[ -x "$WHISPERKIT" ]] && ! _wk_is_stub; then
+  WKSIZE=$(du -sh "$WHISPERKIT" 2>/dev/null | awk '{print $1}')
+  ok "whisperkit-cli present (${WKSIZE})"
+elif _wk_is_stub; then
+  warn "whisperkit-cli is a stub — building from source now…"
+  info "This requires Xcode and takes 5–15 minutes on first run."
+  if command -v swift >/dev/null 2>&1; then
+    bash "$REPO/scripts/build-whisperkit-cli.sh"
+  else
+    warn "Swift not found — skipping build. Install Xcode and run:"
+    warn "  bash scripts/build-whisperkit-cli.sh"
+  fi
+else
+  warn "whisperkit-cli not found — WhisperKit ANE transcription will not work."
+  info "Build it by running: bash scripts/build-whisperkit-cli.sh"
+fi
+
+# ── 7. MLX sidecar binary ─────────────────────────────────────────────────────
+header "7 / 7  MLX sidecar binary"
 MLX_BIN="$BINS/mlx-sidecar-$ARCH_SUFFIX"
 if [[ -f "$MLX_BIN" ]] && [[ -x "$MLX_BIN" ]]; then
   # If it's the dev shell-script launcher (not a PyInstaller binary), that's fine.
@@ -159,7 +182,7 @@ else
   warn "Run: python sidecars/mlx-llm/build.py"
 fi
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# ── Summary ─────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════╗${RESET}"
 echo -e "${BOLD}║           Setup complete!            ║${RESET}"
