@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-05-21
+
+### Removed
+- **AI chapters and b-roll features removed.** `detect_chapters` and
+  `suggest_broll` commands, the `LlmSidecar` manager, `src-tauri/src/llm.rs`,
+  and `src-tauri/src/commands/llm.rs` are all deleted. The `mlx-sidecar`
+  feature flag and its `externalBin` entry in `tauri.conf.json` are also gone.
+  This eliminates the Python / PyInstaller / MLX dependency entirely — the
+  only sidecar binaries now required are `whisper-cli`, `ffmpeg`, and `ffprobe`.
+  The full MLX implementation is preserved at commit `074d1d3`; restore with:
+  `git show 074d1d3:src-tauri/src/commands/llm.rs`
+- `JobKind::DetectChapters` and `JobKind::SuggestBroll` removed from the Rust
+  job queue and from the `JobKind` TypeScript union in `ipc.ts`.
+- AI chapters and b-roll buttons removed from `Toolbox.tsx`; the manual
+  **Chapter** button (adds a chapter at the playhead) is kept.
+
 ## [3.3.0] - 2026-05-21
 
 ### Changed
