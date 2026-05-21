@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-05-21
+
+### Changed
+- **Categorical toolbar collapse.** The compact toolbar (< 860 px) no longer
+  dumps all secondary actions into a single unlabelled "More ▾" menu. Items are
+  now split into two named dropdowns per side:
+  - Left: **Open** and **Save** stay visible; **File ▾** holds Add Clip, New
+    Project, and Open Project.
+  - Right: **Transcribe** stays visible; **Media ▾** holds Record and Music
+    tracks; **Project ▾** holds Snapshots and Close project.
+  Full-width layout (≥ 860 px) is unchanged — all buttons remain flat.
+
 ## [3.2.0] - 2026-05-21
 
 ### Added

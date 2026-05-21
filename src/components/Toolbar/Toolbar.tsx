@@ -741,21 +741,21 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         {/* ── Left tool group ── */}
         {compact ? (
           <div className="tool-group">
-            {/* Always-visible: Open + Save */}
+            {/* Always-visible: Open + Save — the two actions used every session */}
             <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
               <FolderOpen className="h-4 w-4" /> Open
             </Button>
             <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
               <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
             </Button>
-            {/* Overflow: Add Clip, New, Open Project */}
+            {/* File ▾ — project management actions used less frequently */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="tool-button">
-                  More <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                  File <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[160px]">
+              <DropdownMenuContent align="start" className="min-w-[170px]">
                 <DropdownMenuItem onClick={handleAddClip}>
                   <Scissors className="h-4 w-4 mr-2" /> Add Clip
                 </DropdownMenuItem>
@@ -858,7 +858,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         {/* ── Right tool group ── */}
         {compact ? (
           <div className="tool-group">
-            {/* Always-visible: Transcribe (most important action) */}
+            {/* Always-visible: Transcribe — the app's primary action */}
             <Button
               size="sm"
               variant="ghost"
@@ -873,11 +873,11 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               <MicVocal className="h-4 w-4" />
               {hasTranscript ? "Re-Transcribe" : "Transcribe"}
             </Button>
-            {/* Overflow: Record, Music, Snapshots, Close */}
+            {/* Media ▾ — capture / audio inputs */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="tool-button">
-                  More <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                  Media <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[160px]">
@@ -885,8 +885,18 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                   <Radio className="h-4 w-4 mr-2" /> Record
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setMusicDialogOpen(true)}>
-                  <Music className="h-4 w-4 mr-2" /> Music
+                  <Music className="h-4 w-4 mr-2" /> Music tracks
                 </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Project ▾ — history / project lifecycle */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="tool-button">
+                  Project <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
                 <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
                   <History className="h-4 w-4 mr-2" /> Snapshots
                 </DropdownMenuItem>
@@ -895,7 +905,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                   className="text-destructive focus:text-destructive"
                   onClick={handleCloseProject}
                 >
-                  <Power className="h-4 w-4 mr-2" /> Close Project
+                  <Power className="h-4 w-4 mr-2" /> Close project
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
