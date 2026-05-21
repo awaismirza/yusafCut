@@ -202,19 +202,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   /** Set to true before opening the model dialog when the user clicks Re-Transcribe. */
   const forceRetranscribeRef = useRef(false);
 
-  // ── Responsive toolbar: collapse tool groups into dropdowns when narrow ──
+  // toolbarBottomRef kept for potential future use
   const toolbarBottomRef = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
-
-  useEffect(() => {
-    const el = toolbarBottomRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setCompact(entry.contentRect.width < 860);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   /** True when at least one segment already has transcribed words. */
   const hasTranscript = project.segments.some((s) => s.words.length > 0);
@@ -294,6 +283,35 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
     resetPlayer();
     pushToast({ title: "Project closed" });
+  }
+
+  function handleNewProject() {
+    replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
+    resetPlayer();
+  }
+
+  async function handleOpenProject() {
+    const path = await openDialog({
+      multiple: false,
+      filters: [{ name: "Scribe project", extensions: ["scribe"] }],
+    });
+    if (typeof path !== "string") return;
+    setMediaLoading(true);
+    try {
+      const loaded = await loadProject(path);
+      cacheProjectTranscripts(loaded);
+      replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+      resetPlayer();
+      pushToast({ title: "Project opened", description: path });
+    } catch (err) {
+      pushToast({
+        title: "Failed to open project",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setMediaLoading(false);
+    }
   }
 
   async function ensureSelectedModelInstalled() {
@@ -705,12 +723,6 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   return (
     <div className="editor-toolbar">
       <div className="editor-toolbar-top">
-        <div className="traffic-lights" aria-hidden="true">
-          <span className="bg-[#ff5f57]" />
-          <span className="bg-[#febc2e]" />
-          <span className="bg-[#28c840]" />
-        </div>
-
         <div className="toolbar-title">
           <span>{displayName}</span>
           <span>{dirty ? "unsaved edits" : "no edits"}</span>
@@ -738,230 +750,91 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       </div>
 
       <div className="editor-toolbar-bottom" ref={toolbarBottomRef}>
-        {/* ── Left tool group ── */}
-        {compact ? (
-          <div className="tool-group">
-            {/* Always-visible: Open + Save — the two actions used every session */}
-            <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
-              <FolderOpen className="h-4 w-4" /> Open
-            </Button>
-            <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
-              <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
-            </Button>
-            {/* File ▾ — project management actions used less frequently */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="tool-button">
-                  File <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[170px]">
-                <DropdownMenuItem onClick={handleAddClip}>
-                  <Scissors className="h-4 w-4 mr-2" /> Add Clip
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
-                    resetPlayer();
-                  }}
-                >
-                  <FilePlus2 className="h-4 w-4 mr-2" /> New Project
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={async () => {
-                    const path = await openDialog({
-                      multiple: false,
-                      filters: [{ name: "Scribe project", extensions: ["scribe"] }],
-                    });
-                    if (typeof path !== "string") return;
-                    setMediaLoading(true);
-                    try {
-                      const loaded = await loadProject(path);
-                      cacheProjectTranscripts(loaded);
-                      replaceProjectBaseline(loaded, { dirty: false, filePath: path });
-                      resetPlayer();
-                      pushToast({ title: "Project opened", description: path });
-                    } catch (err) {
-                      pushToast({
-                        title: "Failed to open project",
-                        description: String(err),
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setMediaLoading(false);
-                    }
-                  }}
-                >
-                  <FolderOpen className="h-4 w-4 mr-2" /> Open Project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : (
-          <div className="tool-group">
-            <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
-              <FolderOpen className="h-4 w-4" /> Open Media
-            </Button>
-            <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
-              <Scissors className="h-4 w-4" /> Add Clip
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button"
-              onClick={() => {
-                replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
-                resetPlayer();
-              }}
-            >
-              <FilePlus2 className="h-4 w-4" /> New
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button"
-              onClick={async () => {
-                const path = await openDialog({
-                  multiple: false,
-                  filters: [{ name: "Scribe project", extensions: ["scribe"] }],
-                });
-                if (typeof path !== "string") return;
-                setMediaLoading(true);
-                try {
-                  const loaded = await loadProject(path);
-                  cacheProjectTranscripts(loaded);
-                  replaceProjectBaseline(loaded, { dirty: false, filePath: path });
-                  resetPlayer();
-                  pushToast({ title: "Project opened", description: path });
-                } catch (err) {
-                  pushToast({
-                    title: "Failed to open project",
-                    description: String(err),
-                    variant: "destructive",
-                  });
-                } finally {
-                  setMediaLoading(false);
-                }
-              }}
-            >
-              <FolderOpen className="h-4 w-4" /> Project
-            </Button>
-            <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
-              <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
-            </Button>
-          </div>
-        )}
+        {/* ── Left: file operations ── */}
+        <div className="tool-group">
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+            <FolderOpen className="h-4 w-4" /> Open
+          </Button>
+          <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+            <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+          </Button>
+          {/* File ▾ — less-frequent project management actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="ghost" className="tool-button">
+                File <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[170px]">
+              <DropdownMenuItem onClick={handleAddClip}>
+                <Scissors className="h-4 w-4 mr-2" /> Add Clip
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleNewProject}>
+                <FilePlus2 className="h-4 w-4 mr-2" /> New Project
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void handleOpenProject()}>
+                <FolderOpen className="h-4 w-4 mr-2" /> Open Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <Toolbox onFindClick={onFindClick} />
 
-        {/* ── Right tool group ── */}
-        {compact ? (
-          <div className="tool-group">
-            {/* Always-visible: Transcribe — the app's primary action */}
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button tool-button-primary"
-              title={
-                hasTranscript
-                  ? "Clear existing transcript and re-run Whisper from scratch"
-                  : "Transcribe audio with Whisper"
-              }
-              onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
-            >
-              <MicVocal className="h-4 w-4" />
-              {hasTranscript ? "Re-Transcribe" : "Transcribe"}
-            </Button>
-            {/* Media ▾ — capture / audio inputs */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="tool-button">
-                  Media <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[160px]">
-                <DropdownMenuItem onClick={() => setRecordDialogOpen(true)}>
-                  <Radio className="h-4 w-4 mr-2" /> Record
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setMusicDialogOpen(true)}>
-                  <Music className="h-4 w-4 mr-2" /> Music tracks
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {/* Project ▾ — history / project lifecycle */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="tool-button">
-                  Project <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[160px]">
-                <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
-                  <History className="h-4 w-4 mr-2" /> Snapshots
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={handleCloseProject}
-                >
-                  <Power className="h-4 w-4 mr-2" /> Close project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : (
-          <div className="tool-group">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button"
-              onClick={() => setRecordDialogOpen(true)}
-            >
-              <Radio className="h-4 w-4" /> Record
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button"
-              title="Music tracks (ducked under voice on export)"
-              onClick={() => setMusicDialogOpen(true)}
-            >
-              <Music className="h-4 w-4" /> Music
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button"
-              title="Project snapshots (named restore points)"
-              onClick={() => setSnapshotsDialogOpen(true)}
-            >
-              <History className="h-4 w-4" /> Snapshots
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button tool-button-primary"
-              title={
-                hasTranscript
-                  ? "Clear existing transcript and re-run Whisper from scratch"
-                  : "Transcribe audio with Whisper"
-              }
-              onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
-            >
-              <MicVocal className="h-4 w-4" />
-              {hasTranscript ? "Re-Transcribe" : "Transcribe"}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="tool-button tool-button-danger"
-              onClick={handleCloseProject}
-            >
-              <Power className="h-4 w-4" /> Close
-            </Button>
-          </div>
-        )}
+        {/* ── Right: transcribe + capture + project lifecycle ── */}
+        <div className="tool-group">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tool-button tool-button-primary"
+            title={
+              hasTranscript
+                ? "Clear existing transcript and re-run Whisper from scratch"
+                : "Transcribe audio with Whisper"
+            }
+            onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
+          >
+            <MicVocal className="h-4 w-4" />
+            {hasTranscript ? "Re-Transcribe" : "Transcribe"}
+          </Button>
+          {/* Capture ▾ — recording and audio inputs */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="ghost" className="tool-button">
+                Capture <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[160px]">
+              <DropdownMenuItem onClick={() => setRecordDialogOpen(true)}>
+                <Radio className="h-4 w-4 mr-2" /> Record
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setMusicDialogOpen(true)}>
+                <Music className="h-4 w-4 mr-2" /> Music tracks
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Project ▾ — history and project lifecycle */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="ghost" className="tool-button">
+                Project <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[160px]">
+              <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
+                <History className="h-4 w-4 mr-2" /> Snapshots
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={handleCloseProject}
+              >
+                <Power className="h-4 w-4 mr-2" /> Close project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Dialog

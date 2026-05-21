@@ -6,6 +6,7 @@ import { useUIStore } from "@/stores/uiStore";
 import {
   Bookmark,
   Flag,
+  MessageSquareOff,
   MousePointer2,
   RotateCcw,
   Scissors,
@@ -15,6 +16,14 @@ import {
   ZoomOut,
 } from "lucide-react";
 
+/** Common English filler words to remove in one click. */
+const FILLER_TOKENS = new Set([
+  "um", "uh", "umm", "uhh", "hmm", "hm", "er", "err",
+  "like", "literally", "basically", "actually", "you know",
+  "i mean", "i guess", "sort of", "kind of", "you see",
+  "right", "okay", "ok", "so", "well", "anyway",
+]);
+
 interface ToolboxProps {
   onFindClick?: () => void;
 }
@@ -22,6 +31,7 @@ interface ToolboxProps {
 export function Toolbox({ onFindClick }: ToolboxProps) {
   const project = useProjectStore((s) => s.project);
   const removeSilences = useProjectStore((s) => s.removeSilences);
+  const deleteWordsByText = useProjectStore((s) => s.deleteWordsByText);
   const addChapter = useProjectStore((s) => s.addChapter);
   const pushToast = useUIStore((s) => s.pushToast);
   const setEditOperationLabel = useUIStore((s) => s.setEditOperationLabel);
@@ -73,6 +83,30 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
             pushToast({
               title: `Trimmed ${removed} silence${removed === 1 ? "" : "s"}`,
               description: "Use ⌘Z to restore.",
+            });
+          }
+        } finally {
+          setEditOperationLabel(null);
+        }
+      });
+    });
+  }
+
+  function handleRemoveFillers() {
+    setEditOperationLabel("Removing filler words…");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          const removed = deleteWordsByText(FILLER_TOKENS);
+          if (removed === 0) {
+            pushToast({
+              title: "No filler words found",
+              description: "None of the common filler words (um, uh, like…) appear in the transcript.",
+            });
+          } else {
+            pushToast({
+              title: `Removed ${removed} filler word${removed === 1 ? "" : "s"}`,
+              description: "Matching audio ranges are cut from the timeline. Use ⌘Z to restore.",
             });
           }
         } finally {
@@ -160,6 +194,18 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
       >
         <Scissors className="h-4 w-4" />
         Trim silences
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="toolbox-clear-button"
+        title="Remove common filler words (um, uh, like, you know…) and their audio"
+        onClick={handleRemoveFillers}
+        disabled={!project.segments.some((s) => s.words.length > 0)}
+      >
+        <MessageSquareOff className="h-4 w-4" />
+        Remove fillers
       </Button>
       <Button
         type="button"

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-05-21
+
+### Added
+- **Remove filler words.** New "Remove fillers" button in the Toolbox strips common
+  filler words (um, uh, like, you know, literally, basically, etc.) in one click.
+  Each removed word's corresponding audio range is cut from the EDL exactly the same
+  way as a manual delete — with undo (⌘Z) support. Shows the blocking-op progress
+  dialog so the UI never looks frozen during bulk removal.
+
+### Changed
+- **Toolbar cleaned up — no more double traffic lights.** The fake HTML traffic-light
+  circles (red/yellow/green) that appeared below the native macOS title-bar traffic
+  lights are removed. The top bar is now a clean flex row: project name on the left,
+  Export + Captions on the right.
+- **Unified toolbar dropdown layout.** The previous split between "full-width flat buttons"
+  and "compact dropdowns" is replaced with a single consistent layout at all window sizes:
+  - Left: **Open**, **Save**, **File ▾** (Add Clip, New Project, Open Project)
+  - Center: Toolbox (select, find, markers, trim silences, remove fillers, chapter, zoom)
+  - Right: **Transcribe**, **Capture ▾** (Record, Music), **Project ▾** (Snapshots, Close)
+  This eliminates the cramped 10-button flat row that appeared at wider window widths.
+
 ## [3.4.0] - 2026-05-21
 
 ### Removed
