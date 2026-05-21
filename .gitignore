@@ -56,6 +56,10 @@ models/
 *.mlmodelc
 *.mlmodelc.zip
 
+# Mac App Store — provisioning profile and Xcode archive output (never commit)
+src-tauri/*.provisionprofile
+*.xcarchive
+
 # Misc
 .env
 .env.local
