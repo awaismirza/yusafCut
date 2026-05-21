@@ -272,34 +272,65 @@ export function TranscriptEditor({
   }, [selectedWordIds, paragraphs]);
 
   // Highlight the currently playing word.
+  // During silence gaps between words we keep the preceding word dimly highlighted
+  // (is-silence-after) so the playhead position stays visible in the transcript.
   const currentTime = usePlayerStore((s) => s.currentTime);
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
     const timeline = computeTimeline(project);
+
     let activeWordId: string | null = null;
+    let silenceAfterWordId: string | null = null; // last word before a silence gap
+
     for (const entry of timeline) {
       if (currentTime >= entry.outputStart && currentTime < entry.outputEnd) {
         const sourceTime = entry.sourceIn + (currentTime - entry.outputStart);
         const seg = project.segments.find((s) => s.id === entry.segmentId);
         if (seg) {
+          let prevWordId: string | null = null;
           for (const w of seg.words) {
             if (sourceTime >= w.start && sourceTime < w.end) {
               activeWordId = w.id;
               break;
             }
+            // Track the last word whose end is at or before sourceTime
+            if (w.end <= sourceTime) {
+              prevWordId = w.id;
+            }
+          }
+          // If we are between two words (silence gap), highlight the preceding word
+          if (!activeWordId && prevWordId !== null) {
+            silenceAfterWordId = prevWordId;
           }
         }
         break;
       }
     }
+
     root
-      .querySelectorAll<HTMLElement>(".word.is-playing")
-      .forEach((el) => el.classList.remove("is-playing"));
+      .querySelectorAll<HTMLElement>(".word.is-playing, .word.is-silence-after")
+      .forEach((el) => {
+        el.classList.remove("is-playing");
+        el.classList.remove("is-silence-after");
+      });
+
     if (activeWordId) {
       const el = root.querySelector<HTMLElement>(`[data-word-id="${CSS.escape(activeWordId)}"]`);
       if (el) {
         el.classList.add("is-playing");
+        const rect = el.getBoundingClientRect();
+        const cRect = root.getBoundingClientRect();
+        if (rect.bottom > cRect.bottom || rect.top < cRect.top) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    } else if (silenceAfterWordId) {
+      const el = root.querySelector<HTMLElement>(
+        `[data-word-id="${CSS.escape(silenceAfterWordId)}"]`,
+      );
+      if (el) {
+        el.classList.add("is-silence-after");
         const rect = el.getBoundingClientRect();
         const cRect = root.getBoundingClientRect();
         if (rect.bottom > cRect.bottom || rect.top < cRect.top) {

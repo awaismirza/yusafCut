@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-05-21
+
+### Fixed
+- **Silence-gap sync / word highlighting.** The playhead was visually losing
+  track of its position in the transcript whenever it entered a silence gap
+  between two spoken words. The root cause: the highlighting loop only matched
+  words whose `start ≤ sourceTime < end`, so any gap left `activeWordId` null
+  and the editor cleared the highlight entirely. Fix: the loop now also tracks
+  the last word whose `end ≤ sourceTime`. When the playhead is in a silence gap
+  the preceding word receives the new `is-silence-after` CSS class — a
+  half-opacity teal underline — so the reader's eye stays anchored while the
+  gap plays out. Full-brightness `is-playing` is restored the moment the next
+  word begins. No EDL changes; purely a visual / highlighting fix.
+
 ## [3.6.0] - 2026-05-21
 
 ### Added
