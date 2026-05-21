@@ -1,10 +1,18 @@
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { projectChapters, wordIdsInOutputRange } from "@/lib/edl";
 import { usePlayerStore } from "@/stores/playerStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useUIStore } from "@/stores/uiStore";
 import {
   Bookmark,
+  ChevronDown,
   Flag,
   MessageSquareOff,
   MousePointer2,
@@ -45,6 +53,10 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   const setSelectedWordIds = usePlayerStore((s) => s.setSelectedWordIds);
   const setTimelineZoom = usePlayerStore((s) => s.setTimelineZoom);
 
+  const hasWords = project.segments.some((s) => s.words.length > 0);
+  const hasMultipleWords = project.segments.some((s) => s.words.length > 1);
+  const hasMarkers = timelineMarkIn !== null || timelineMarkOut !== null;
+
   function setMarkIn() {
     setTimelineRange(currentTime, timelineMarkOut);
     if (timelineMarkOut !== null) {
@@ -65,12 +77,8 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   }
 
   function handleRemoveSilences() {
-    // Show the loader immediately so the user sees feedback while the main
-    // thread is busy applying the silence-removal edit. We defer the actual
-    // work by one rAF so React has time to paint the dialog first.
     setEditOperationLabel("Trimming silences…");
     requestAnimationFrame(() => {
-      // A second rAF ensures the browser has committed the paint.
       requestAnimationFrame(() => {
         try {
           const removed = removeSilences();
@@ -128,103 +136,96 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   }
 
   return (
-    <aside className="editor-toolbox" aria-label="Editing tools">
+    <div className="tool-group" aria-label="Editing tools">
+      {/* Select — always visible */}
       <Button
         type="button"
-        size="icon"
+        size="sm"
         variant="ghost"
-        className="toolbox-button is-active"
-        title="Select"
+        className="tool-button tool-button-active"
+        title="Select tool"
       >
         <MousePointer2 className="h-4 w-4" />
       </Button>
+
+      {/* Find — always visible */}
       <Button
         type="button"
-        size="icon"
+        size="sm"
         variant="ghost"
-        className="toolbox-button"
-        title="Find transcript"
+        className="tool-button"
+        title="Find in transcript"
         onClick={onFindClick}
       >
         <Search className="h-4 w-4" />
       </Button>
-      <span className="toolbox-divider" />
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className={timelineMarkIn !== null ? "toolbox-button is-active" : "toolbox-button"}
-        title="Set in marker (I)"
-        onClick={setMarkIn}
-      >
-        <Flag className="h-4 w-4" />
-        <span>I</span>
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className={timelineMarkOut !== null ? "toolbox-button is-active" : "toolbox-button"}
-        title="Set out marker (O)"
-        onClick={setMarkOut}
-      >
-        <Flag className="h-4 w-4" />
-        <span>O</span>
-      </Button>
+
+      {/* Markers ▾ */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={hasMarkers ? "tool-button tool-button-active" : "tool-button"}
+            title="Timeline markers"
+          >
+            <Flag className="h-4 w-4" />
+            Markers <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[180px]">
+          <DropdownMenuItem onClick={setMarkIn}>
+            <Flag className="h-4 w-4 mr-2" />
+            Set In point
+            <span className="ml-auto text-xs text-muted-foreground pl-4">I</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={setMarkOut}>
+            <Flag className="h-4 w-4 mr-2" />
+            Set Out point
+            <span className="ml-auto text-xs text-muted-foreground pl-4">O</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={clearMarkers} disabled={!hasMarkers}>
+            <X className="h-4 w-4 mr-2" />
+            Clear markers
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Edit ▾ */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="ghost" className="tool-button" title="Edit operations">
+            <Scissors className="h-4 w-4" />
+            Edit <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[200px]">
+          <DropdownMenuItem onClick={handleRemoveSilences} disabled={!hasMultipleWords}>
+            <Scissors className="h-4 w-4 mr-2" />
+            Trim silences
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleRemoveFillers} disabled={!hasWords}>
+            <MessageSquareOff className="h-4 w-4 mr-2" />
+            Remove fillers
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={handleAddChapter}
+            disabled={project.segments.length === 0}
+          >
+            <Bookmark className="h-4 w-4 mr-2" />
+            {chapterCount > 0 ? `Add chapter (${chapterCount})` : "Add chapter"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Zoom controls — three compact icon buttons */}
       <Button
         type="button"
         size="sm"
         variant="ghost"
-        className="toolbox-clear-button"
-        title="Clear markers (X)"
-        onClick={clearMarkers}
-      >
-        <X className="h-4 w-4" />
-        Clear
-      </Button>
-      <span className="toolbox-divider" />
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="toolbox-clear-button"
-        title="Trim silences longer than 600ms between words"
-        onClick={handleRemoveSilences}
-        disabled={!project.segments.some((s) => s.words.length > 1)}
-      >
-        <Scissors className="h-4 w-4" />
-        Trim silences
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="toolbox-clear-button"
-        title="Remove common filler words (um, uh, like, you know…) and their audio"
-        onClick={handleRemoveFillers}
-        disabled={!project.segments.some((s) => s.words.length > 0)}
-      >
-        <MessageSquareOff className="h-4 w-4" />
-        Remove fillers
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="toolbox-clear-button"
-        title="Add chapter at playhead (B)"
-        onClick={handleAddChapter}
-        disabled={project.segments.length === 0}
-      >
-        <Bookmark className="h-4 w-4" />
-        {chapterCount > 0 ? `Chapter (${chapterCount})` : "Chapter"}
-      </Button>
-      <span className="toolbox-divider" />
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="toolbox-button"
+        className="tool-button"
         title="Zoom out timeline"
         onClick={() => setTimelineZoom(timelineZoom / 1.5)}
         disabled={timelineZoom <= 1.01}
@@ -233,26 +234,26 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
       </Button>
       <Button
         type="button"
-        size="icon"
+        size="sm"
         variant="ghost"
-        className="toolbox-button"
-        title={`Timeline zoom ${timelineZoom.toFixed(1)}x`}
+        className="tool-button"
+        title={`Zoom ${timelineZoom.toFixed(1)}× — click to reset`}
         onClick={() => setTimelineZoom(1)}
       >
-        <RotateCcw className="h-4 w-4" />
-        <span>{timelineZoom.toFixed(0)}x</span>
+        <RotateCcw className="h-3 w-3" />
+        <span className="text-xs tabular-nums">{timelineZoom.toFixed(0)}×</span>
       </Button>
       <Button
         type="button"
-        size="icon"
+        size="sm"
         variant="ghost"
-        className="toolbox-button"
+        className="tool-button"
         title="Zoom in timeline"
         onClick={() => setTimelineZoom(timelineZoom * 1.5)}
         disabled={timelineZoom >= 31.99}
       >
         <ZoomIn className="h-4 w-4" />
       </Button>
-    </aside>
+    </div>
   );
 }

@@ -164,67 +164,14 @@
   color: hsl(var(--destructive));
   background: hsl(var(--destructive) / 0.11);
 }
-
-.editor-toolbox {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 0 8px;
-  border-inline: 1px solid hsl(var(--border) / 0.75);
-  background: hsl(30 5% 8% / 0.7);
-}
-.toolbox-button {
-  position: relative;
-  width: 30px;
-  height: 26px;
-  border-radius: 6px;
-  color: hsl(var(--muted-foreground));
-}
-.toolbox-button:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--accent));
-}
-.toolbox-button.is-active {
+.tool-button-active {
   color: hsl(var(--primary));
   background: hsl(var(--primary) / 0.13);
   box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.35);
 }
-.toolbox-button span {
-  position: absolute;
-  bottom: 2px;
-  right: 4px;
-  font:
-    700 8px/1 ui-monospace,
-    "Cascadia Code",
-    monospace;
-  color: hsl(var(--muted-foreground));
-}
-.toolbox-button.is-active span {
+.tool-button-active:hover {
   color: hsl(var(--primary));
-}
-.toolbox-clear-button {
-  height: 26px;
-  gap: 5px;
-  border-radius: 6px;
-  padding: 0 7px;
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  font-weight: 700;
-}
-.toolbox-clear-button:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--accent));
-}
-.toolbox-divider {
-  width: 1px;
-  height: 18px;
-  margin: 0 2px;
-  background: hsl(var(--border));
+  background: hsl(var(--primary) / 0.2);
 }
 
 /* ════════════════════════════════════════════════════════════════════════

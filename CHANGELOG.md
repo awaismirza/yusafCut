@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-05-21
+
+### Added
+- **DTW word-timestamp refinement.** `whisper-cli` is now invoked with
+  `--dtw <model>` for all standard model sizes (tiny, base, small, medium,
+  large-v1/v2/v3). Dynamic Time Warping aligns each word's start/end to its
+  actual audio onset on the mel spectrogram — bringing timing accuracy from
+  ~100 ms down to ~20 ms without any extra dependency. large-v3-turbo is
+  skipped (not in whisper.cpp's DTW model list); its beam-search timestamps
+  are already solid.
+- **Cut-point pre-roll padding.** Both the full-reencode and smart-cut export
+  paths now honour `project.settings.paddingMs` (default 80 ms) by pulling
+  each segment's `sourceIn` back by that amount before handing it to FFmpeg.
+  This prevents word-initial consonants from being clipped when Whisper's
+  raw timestamps land slightly late. Only the start is padded; the end is left
+  at the exact word boundary to avoid overlapping adjacent segments.
+
+### Changed
+- **Toolbox converted to dropdown groups.** The 10-item flat icon row in the
+  centre of the toolbar is replaced with a clean 5-element group:
+  - **Select** and **Find** remain always-visible icon buttons.
+  - **Markers ▾** dropdown: Set In (I), Set Out (O), Clear markers.
+  - **Edit ▾** dropdown: Trim silences, Remove fillers, Add chapter.
+  - **Zoom** remains three compact icon buttons.
+  The toolbox now uses the same `tool-group` / `tool-button` CSS as the
+  left/right toolbar groups and takes a fraction of the horizontal space.
+- **Menu consolidation.** Snapshots and Close project moved from a separate
+  **Project ▾** right-side dropdown into **File ▾** alongside Add Clip, New
+  Project, and Open Project. The right-side group is now just **Transcribe**
+  and **Capture ▾** (Record, Music).
+
 ## [3.5.0] - 2026-05-21
 
 ### Added

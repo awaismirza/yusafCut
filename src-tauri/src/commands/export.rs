@@ -211,13 +211,18 @@ async fn try_smart_cut(
         return Err(SmartCutError::Skip("source has too few keyframes".into()));
     }
 
+    // Apply the same cut-point pre-roll padding as the full-reencode path so
+    // smart-cut exports are equally protected against consonant clipping.
+    let pad_secs = opts.project.settings.padding_ms as f64 / 1000.0;
+
     // Plan chunks for every segment.
     let mut plans: Vec<Vec<Chunk>> = Vec::with_capacity(opts.project.segments.len());
     let mut total_chunks = 0usize;
     let mut copyable = 0.0f64;
     let mut reencode_secs = 0.0f64;
     for seg in &opts.project.segments {
-        let chunks = smart_cut::plan_segment(seg.source_in, seg.source_out, &kfs);
+        let padded_in = (seg.source_in - pad_secs).max(0.0);
+        let chunks = smart_cut::plan_segment(padded_in, seg.source_out, &kfs);
         for c in &chunks {
             match c.kind {
                 ChunkKind::Copy => copyable += c.duration(),
@@ -469,6 +474,12 @@ async fn full_reencode(
     total_duration: f64,
     chapter_meta: Option<PathBuf>,
 ) -> Result<(), String> {
+    // Cut-point pre-roll padding: pull each segment's source_in back by
+    // padding_ms so word-initial consonants aren't clipped when Whisper's
+    // timestamps land a few milliseconds late. We only extend the start (not
+    // the end) to avoid overlapping with adjacent segments' content.
+    let pad_secs = opts.project.settings.padding_ms as f64 / 1000.0;
+
     // Build a list of (input_path, in, out) by walking the EDL in output order.
     let mut inputs: Vec<&String> = Vec::new();
     let mut clip_specs: Vec<(usize, f64, f64)> = Vec::new();
@@ -485,7 +496,7 @@ async fn full_reencode(
                 inputs.len() - 1
             }
         };
-        clip_specs.push((idx, seg.source_in, seg.source_out));
+        clip_specs.push((idx, (seg.source_in - pad_secs).max(0.0), seg.source_out));
     }
 
     // Build the segment filter graph (trim each segment, concat into [outv][outa]).
