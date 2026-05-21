@@ -1,6 +1,44 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude when working with code in this repository.
+
+## Workflow rules (mandatory — follow for every task)
+
+### 1. Every feature or fix starts on a new branch
+Always create a new branch from `main` before beginning any change:
+```bash
+git checkout main && git pull origin main
+git checkout -b feature/<short-description>   # or fix/, chore/, docs/
+```
+
+### 2. Bump the version on every meaningful commit
+Every feature branch that will be merged to `main` must bump the version in:
+- `package.json` → `"version"`
+- `src-tauri/Cargo.toml` → `[package] version`
+- `src-tauri/tauri.conf.json` → `"version"`
+
+Use semantic versioning (semver):
+- `patch` (x.x.**Z**) — bug fixes, tiny tweaks
+- `minor` (x.**Y**.0) — new features, non-breaking
+- `major` (**X**.0.0) — breaking changes
+
+### 3. Commit only — never create the PR or merge
+After committing, push the branch:
+```bash
+git push -u origin <branch-name>
+```
+**Do NOT create the PR or merge.** Awais will do that manually when ready. The one exception is when Awais explicitly asks you to push, create PR, and merge — then do it in one go and create the version tag.
+
+### 4. Keep docs updated on every change
+Every time you implement a feature or fix a bug you **must** also update in the same commit:
+- `CHANGELOG.md` — add an entry under `[Unreleased]` or the new version section
+- `docs/architecture.md` — if the data flow, component layout, or Rust structure changed
+- `README.md` — if the feature table, status, or tech stack changed
+- `scribe-spec.md` — if spec sections describing the changed behaviour are outdated
+
+No code commit should land without the corresponding doc update.
+
+---
 
 ## Commands
 
@@ -35,6 +73,8 @@ npm run fresh           # Clean install + dev
 
 Run a single Vitest test: `npx vitest run tests/edl.test.ts`
 
+---
+
 ## Architecture
 
 Scribe is a **local-first, Apple Silicon-only** text-based video editor built with Tauri 2 (React frontend + Rust backend). Editing the transcript edits the video. All processing is 100% local — no cloud, no telemetry.
@@ -61,13 +101,46 @@ ffprobe / ffmpeg / whisper-cli / mlx-sidecar
 
 - **`lib/edl.ts`** — pure EDL operations (no imports from React/Tauri)
 - **`lib/ipc.ts`** — all Tauri `invoke` wrappers in one place
-- **`stores/`** — `projectStore` (EDL + project metadata), `playerStore` (video playback), `jobsStore` (background jobs), `uiStore` (modal state)
+- **`stores/`** — `projectStore` (EDL + project metadata), `playerStore` (video playback), `jobsStore` (background jobs), `uiStore` (modal state + operation loaders)
+- **`components/Toolbar/`** — top toolbar with responsive overflow dropdowns (collapses at < 860 px), all progress dialogs, and transcription settings
+- **`components/Toolbox/`** — inline editing tools: markers, trim silences, chapters, b-roll, zoom
 - **`components/TranscriptEditor/`** — TipTap editor with custom `WordNode` that maps each word to its EDL segment
-- **`components/VideoPreview/`** — single `<video>` element; architecture doc explains why there's only one
+- **`components/VideoPreview/`** — single `<video>` element; see `docs/architecture.md` for why
+
+### UI loading pattern
+
+Every operation that blocks the UI **must** show an indeterminate progress dialog via `uiStore`:
+
+| Store field | When it is `true` / non-null |
+|---|---|
+| `mediaLoading` | Media file is being probed by ffprobe |
+| `transcribeProgress` | Whisper is running |
+| `exportingProgress` | FFmpeg export is in progress |
+| `modelDownloadProgress` | A Whisper model is being downloaded |
+| `editOperationLabel` | Any heavy synchronous edit (Trim Silences, AI chapters, B-roll, etc.) |
+
+To add a loader for a new heavy operation:
+1. Set `useUIStore.getState().setEditOperationLabel("Doing X…")` before the work starts
+2. Wrap the actual work in a double `requestAnimationFrame` so the dialog renders first
+3. Call `setEditOperationLabel(null)` in the `finally` block
 
 ### Rust backend (`src-tauri/src/`)
 
-Commands are registered in `commands/mod.rs` and grouped by domain: `media`, `transcribe`, `project`, `export`, `snapshots`, `llm`, `jobs`, `misc`. Business logic lives in the module files (`edl.rs`, `project.rs`, `transcribe.rs`, etc.), not the command handlers.
+Commands are registered in `commands/mod.rs` and grouped by domain: `media`, `transcribe`, `project`, `export`, `snapshots`, `llm`, `jobs`, `misc`. Business logic lives in the module files, not the command handlers.
+
+### Transcription engine
+
+Scribe uses **whisper.cpp** exclusively for transcription via the `whisper-cli` sidecar binary with Core ML + Metal acceleration.
+
+Key flags for timestamp accuracy:
+- `--split-on-word` — per-token word boundaries
+- `--word-thold 0.01` — keep all tokens
+- `--max-len 0` — unbounded segment length (prevents timestamp compression drift)
+- `--best-of 5 --beam-size 5` — beam search for quality
+
+> **WhisperKit / ANE restoration note:** WhisperKit was removed in v3.2.0 because ANE-quantized models caused video/text drift. To restore it, run:
+> `git show 4726d25:src-tauri/src/commands/transcribe.rs` (Rust)
+> `git show 4726d25:src/components/Toolbar/Toolbar.tsx` (frontend engine picker)
 
 ### Sidecar binaries (`src-tauri/binaries/`)
 
@@ -75,9 +148,10 @@ All binaries are `aarch64-apple-darwin` only:
 - `ffmpeg` / `ffprobe` — video encode/decode (VideoToolbox HW acceleration)
 - `whisper-cli` — transcription (Core ML + Metal via whisper.cpp)
 - `mlx-sidecar` — optional on-device LLM (PyInstaller bundle, `mlx-sidecar` feature flag)
-- `whisperkit-cli` — Phase 2 roadmap stub
 
 Fetch scripts: `src-tauri/binaries/fetch.sh` (downloads FFmpeg/FFprobe; whisper-cli must be built manually per `HOW_TO_RUN.md`).
+
+---
 
 ## Key constraints
 

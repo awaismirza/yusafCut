@@ -1,12 +1,12 @@
 //! Transcription engine parsers.
 //!
 //! The actual binary invocations are in `commands::transcribe`. This module
-//! contains pure JSON parsers for:
-//!   - whisper.cpp `--output-json-full` format  (`parse_whisper_json`)
-//!   - WhisperKit JSON output format             (`parse_whisperkit_json`)
+//! contains pure JSON parsers for whisper.cpp `--output-json-full` format.
 //!
-//! Both are exposed as pure functions so they can be unit-tested without
-//! spawning any binary.
+//! WhisperKit was removed in v3.2.0 — restore from commit 4726d25 if needed.
+//!
+//! `parse_whisper_json` is exposed as a pure function so it can be unit-tested
+//! without spawning any binary.
 
 use crate::edl::Word;
 use anyhow::{Context, Result};
@@ -105,101 +105,6 @@ fn ms_to_sec(ms: u64) -> f64 {
     ms as f64 / 1000.0
 }
 
-// ---------------------------------------------------------------------------
-// WhisperKit output parser
-// ---------------------------------------------------------------------------
-//
-// WhisperKit (argmaxinc/WhisperKit) writes a JSON file whose top-level
-// structure is:
-//
-//   {
-//     "text": "...",
-//     "segments": [
-//       {
-//         "id": 0,
-//         "seek": 0,
-//         "start": 0.0,     ← seconds (float)
-//         "end": 3.84,
-//         "text": " Hello world",
-//         "tokens": [50364, 2425, ...],
-//         "tokenLogProbs": [[...], ...],
-//         "words": [         ← word-level timestamps (present when --word-timestamps is passed)
-//           { "word": " Hello", "start": 0.0, "end": 0.56, "probability": 0.98 },
-//           { "word": " world", "start": 0.56, "end": 1.12, "probability": 0.95 }
-//         ]
-//       }
-//     ]
-//   }
-//
-// We prefer the per-word entries when present; fall back to segment-level
-// timestamps when word timestamps are absent (older model or short file).
-
-#[derive(Debug, Deserialize)]
-struct WhisperKitOutput {
-    segments: Vec<WhisperKitSegment>,
-}
-
-#[derive(Debug, Deserialize)]
-struct WhisperKitSegment {
-    start: f64,
-    end: f64,
-    text: String,
-    #[serde(default)]
-    words: Vec<WhisperKitWord>,
-}
-
-#[derive(Debug, Deserialize)]
-struct WhisperKitWord {
-    word: String,
-    start: f64,
-    end: f64,
-    probability: f64,
-}
-
-/// Parse WhisperKit's JSON output into our `Word` list.
-pub fn parse_whisperkit_json(json: &str) -> Result<Vec<Word>> {
-    let parsed: WhisperKitOutput =
-        serde_json::from_str(json).context("invalid WhisperKit JSON")?;
-
-    let mut words = Vec::new();
-
-    for seg in parsed.segments {
-        if seg.words.is_empty() {
-            // No word-level timestamps — fall back to one "word" per segment
-            // (coarse, but still usable for editing).
-            let text = seg.text.trim().to_string();
-            if text.is_empty() || text.chars().all(|c| !c.is_alphanumeric()) {
-                continue;
-            }
-            words.push(Word {
-                id: Uuid::new_v4().to_string(),
-                text,
-                start: seg.start,
-                end: seg.end,
-                confidence: 1.0,
-                speaker: None,
-            });
-        } else {
-            for w in seg.words {
-                let text = w.word.trim().to_string();
-                if text.is_empty() || text.chars().all(|c| !c.is_alphanumeric()) {
-                    continue;
-                }
-                words.push(Word {
-                    id: Uuid::new_v4().to_string(),
-                    text,
-                    start: w.start,
-                    end: w.end,
-                    confidence: w.probability.clamp(0.0, 1.0),
-                    speaker: None,
-                });
-            }
-        }
-    }
-
-    Ok(words)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,83 +180,5 @@ mod tests {
         let words = parse_whisper_json(json).unwrap();
         assert_eq!(words.len(), 1);
         assert_eq!(words[0].text, "hi");
-    }
-
-    // ── WhisperKit parser tests ──────────────────────────────────────────────
-
-    #[test]
-    fn parses_whisperkit_word_level_output() {
-        let json = r#"{
-            "text": " Hello world",
-            "segments": [
-              {
-                "id": 0,
-                "seek": 0,
-                "start": 0.0,
-                "end": 1.5,
-                "text": " Hello world",
-                "tokens": [],
-                "words": [
-                  {"word": " Hello", "start": 0.0, "end": 0.56, "probability": 0.98},
-                  {"word": " world", "start": 0.56, "end": 1.12, "probability": 0.95}
-                ]
-              }
-            ]
-        }"#;
-        let words = parse_whisperkit_json(json).unwrap();
-        assert_eq!(words.len(), 2);
-        assert_eq!(words[0].text, "Hello");
-        assert!((words[0].start - 0.0).abs() < 1e-9);
-        assert!((words[0].end - 0.56).abs() < 1e-9);
-        assert!((words[0].confidence - 0.98).abs() < 1e-9);
-        assert_eq!(words[1].text, "world");
-        assert!((words[1].start - 0.56).abs() < 1e-9);
-    }
-
-    #[test]
-    fn parses_whisperkit_segment_fallback_when_no_words() {
-        // When --word-timestamps is not passed, `words` array is absent.
-        let json = r#"{
-            "text": " Testing fallback",
-            "segments": [
-              {
-                "id": 0,
-                "seek": 0,
-                "start": 5.0,
-                "end": 7.5,
-                "text": " Testing fallback",
-                "tokens": []
-              }
-            ]
-        }"#;
-        let words = parse_whisperkit_json(json).unwrap();
-        assert_eq!(words.len(), 1);
-        assert_eq!(words[0].text, "Testing fallback");
-        assert!((words[0].start - 5.0).abs() < 1e-9);
-        assert!((words[0].end - 7.5).abs() < 1e-9);
-    }
-
-    #[test]
-    fn whisperkit_drops_punctuation_only_words() {
-        let json = r#"{
-            "text": " Hi.",
-            "segments": [
-              {
-                "id": 0,
-                "seek": 0,
-                "start": 0.0,
-                "end": 1.0,
-                "text": " Hi.",
-                "tokens": [],
-                "words": [
-                  {"word": " Hi", "start": 0.0, "end": 0.5, "probability": 0.99},
-                  {"word": ".", "start": 0.5, "end": 0.6, "probability": 1.0}
-                ]
-              }
-            ]
-        }"#;
-        let words = parse_whisperkit_json(json).unwrap();
-        assert_eq!(words.len(), 1);
-        assert_eq!(words[0].text, "Hi");
     }
 }

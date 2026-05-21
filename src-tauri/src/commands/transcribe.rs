@@ -1,11 +1,10 @@
 //! Transcription commands:
-//!   - `transcribe`     — extract 16kHz mono WAV, run transcription engine, parse JSON, emit progress
+//!   - `transcribe`     — extract 16kHz mono WAV, run whisper-cli, parse JSON, emit progress
 //!   - `list_models`    — what is installed locally, what needs downloading
 //!   - `download_model` — fetch a model from Hugging Face
 //!
-//! Two engines are supported, selected via `TranscriptionEngine` in `TranscribeOpts`:
-//!   - `whisper-cpp`  (default) — whisper-cli sidecar, GGML models + Core ML encoders
-//!   - `whisper-kit`            — whisperkit-cli sidecar, native ANE via Core ML .mlpackage
+//! Only whisper.cpp is supported (via the `whisper-cli` sidecar with Core ML + Metal).
+//! WhisperKit was removed in v3.2.0 — restore from commit 4726d25 if needed.
 //!
 //! Progress events are emitted on the channel `transcribe:progress` and
 //! `model:download:progress`. Frontend subscribes via `ipc.ts`.
@@ -13,7 +12,7 @@
 use crate::AppState;
 use crate::edl::Word;
 use crate::jobs::JobKind;
-use crate::transcribe::{parse_whisper_json, parse_whisperkit_json};
+use crate::transcribe::parse_whisper_json;
 use futures_util::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -27,20 +26,15 @@ use tokio::io::AsyncWriteExt as _;
 // TranscriptionEngine
 // ---------------------------------------------------------------------------
 
-/// Which inference backend to use for a transcription job.
+/// Transcription backend. whisper.cpp only since v3.2.0.
 ///
-/// The frontend stores this as a user preference and passes it in
-/// `TranscribeOpts`. Defaults to `WhisperCpp` for backwards compatibility.
+/// WhisperKit was removed because ANE-quantized models produced less accurate
+/// word timestamps, causing video/text drift. To restore it, see commit 4726d25.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum TranscriptionEngine {
-    /// whisper-cli (whisper.cpp), GGML models accelerated by Core ML encoders.
-    /// Widest model coverage; good baseline performance on Apple Silicon.
     #[default]
     WhisperCpp,
-    /// whisperkit-cli (Argmax WhisperKit), native ANE via Core ML `.mlpackage`.
-    /// Skips CPU round-trips; typically 2–4× faster than whisper.cpp on M-series.
-    WhisperKit,
 }
 
 // ---------------------------------------------------------------------------
@@ -103,65 +97,6 @@ impl WhisperModel {
 }
 
 // ---------------------------------------------------------------------------
-// WhisperKitModel (Core ML .mlpackage bundles from argmaxinc/whisperkit-coreml)
-// ---------------------------------------------------------------------------
-
-/// WhisperKit models available for download.
-///
-/// These are the `.mlmodelc` bundles published by Argmax at
-/// `huggingface.co/argmaxinc/whisperkit-coreml`. Each "model repo" is a
-/// directory that contains `AudioEncoder.mlmodelc`, `MelSpectrogram.mlmodelc`,
-/// `TextDecoder.mlmodelc`, `config.json`, and `generation_config.json`.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum WhisperKitModel {
-    /// openai/whisper-tiny (~39 M params). ANE-only; blazing fast.
-    #[serde(rename = "openai_whisper-tiny")]
-    Tiny,
-    /// openai/whisper-base — good balance of speed and quality.
-    #[serde(rename = "openai_whisper-base")]
-    Base,
-    /// openai/whisper-small — solid quality, still fast on ANE.
-    #[serde(rename = "openai_whisper-small")]
-    Small,
-    /// openai/whisper-large-v3-turbo — distilled, ~large accuracy at ~small speed.
-    #[serde(rename = "openai_whisper-large-v3-turbo")]
-    LargeV3Turbo,
-    /// openai/whisper-large-v3 — highest accuracy; ~4 GB on-disk.
-    #[serde(rename = "openai_whisper-large-v3")]
-    LargeV3,
-}
-
-impl WhisperKitModel {
-    /// The repo subdirectory name used in the Argmax HuggingFace space.
-    pub fn repo_name(self) -> &'static str {
-        match self {
-            WhisperKitModel::Tiny => "openai_whisper-tiny",
-            WhisperKitModel::Base => "openai_whisper-base",
-            WhisperKitModel::Small => "openai_whisper-small",
-            WhisperKitModel::LargeV3Turbo => "openai_whisper-large-v3-turbo",
-            WhisperKitModel::LargeV3 => "openai_whisper-large-v3",
-        }
-    }
-
-    /// Local directory name under `<app-data>/whisperkit-models/`.
-    pub fn local_dir(self) -> &'static str {
-        self.repo_name()
-    }
-
-    /// Approximate download size in MiB (all `.mlmodelc` bundles combined).
-    pub fn size_mb(self) -> u64 {
-        match self {
-            WhisperKitModel::Tiny => 77,
-            WhisperKitModel::Base => 190,
-            WhisperKitModel::Small => 640,
-            WhisperKitModel::LargeV3Turbo => 1700,
-            WhisperKitModel::LargeV3 => 3090,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Shared ModelInfo (returned by list_models)
 // ---------------------------------------------------------------------------
 
@@ -184,25 +119,22 @@ pub struct TranscribeOpts {
     pub media_id: String,
     #[serde(rename = "mediaPath")]
     pub media_path: String,
-    /// Which transcription engine to use. Defaults to `whisper-cpp`.
+    /// Always "whisper-cpp" since v3.2.0.
     #[serde(rename = "engine", default)]
     pub engine: TranscriptionEngine,
-    /// Model name for the chosen engine.
-    ///   - whisper-cpp  → `WhisperModel` serialised as kebab-case (e.g. "large-v3-turbo")
-    ///   - whisper-kit  → `WhisperKitModel` repo name (e.g. "openai_whisper-large-v3-turbo")
+    /// WhisperModel slug in kebab-case, e.g. "large-v3-turbo".
     #[serde(rename = "modelName")]
     pub model_name: String,
     /// Total media duration in seconds — used to emit accurate 0..1 progress.
     #[serde(rename = "mediaDuration", default)]
     pub media_duration: f64,
-    /// BCP-47 language code for the source audio (e.g. "fr", "es").
-    /// `None` / omitted → Whisper auto-detects. "auto" is treated as None.
+    /// BCP-47 language code. `None` / omitted → Whisper auto-detects.
     #[serde(rename = "language", default)]
     pub language: Option<String>,
-    /// Output English regardless of source language (whisper-cpp `--translate`).
+    /// Output English regardless of source language (`--translate`).
     #[serde(rename = "translate", default)]
     pub translate: bool,
-    /// Attempt speaker diarisation (whisper-cpp `--diarize`).
+    /// Attempt speaker diarisation (`--diarize`).
     #[serde(rename = "diarize", default)]
     pub diarize: bool,
 }
@@ -212,7 +144,6 @@ pub struct TranscribeResult {
     #[serde(rename = "mediaId")]
     pub media_id: String,
     pub words: Vec<Word>,
-    /// Which engine produced this result.
     pub engine: TranscriptionEngine,
 }
 
@@ -235,60 +166,31 @@ fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(p)
 }
 
-fn whisperkit_models_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let mut p = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    p.push("whisperkit-models");
-    Ok(p)
-}
-
 // ---------------------------------------------------------------------------
-// list_models  (both engines)
+// list_models  (whisper.cpp GGML only)
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
 pub async fn list_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
-    let mut out = Vec::new();
-
-    // — whisper.cpp GGML models —
     let ggml_dir = models_dir(&app)?;
-    for &m in &[
+    let out = [
         WhisperModel::Tiny,
         WhisperModel::Base,
         WhisperModel::Small,
         WhisperModel::Medium,
         WhisperModel::LargeV3Turbo,
-    ] {
-        out.push(ModelInfo {
-            engine: TranscriptionEngine::WhisperCpp,
-            name: serde_json::to_value(m)
-                .ok()
-                .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_default(),
-            size_mb: m.size_mb(),
-            installed: ggml_dir.join(m.filename()).exists(),
-        });
-    }
-
-    // — WhisperKit .mlmodelc models —
-    let wk_dir = whisperkit_models_dir(&app)?;
-    for &m in &[
-        WhisperKitModel::Tiny,
-        WhisperKitModel::Base,
-        WhisperKitModel::Small,
-        WhisperKitModel::LargeV3Turbo,
-        WhisperKitModel::LargeV3,
-    ] {
-        // "installed" = config.json sentinel present (written last by download)
-        let model_dir = wk_dir.join(m.local_dir());
-        let installed = model_dir.join("config.json").exists();
-        out.push(ModelInfo {
-            engine: TranscriptionEngine::WhisperKit,
-            name: m.repo_name().to_string(),
-            size_mb: m.size_mb(),
-            installed,
-        });
-    }
-
+    ]
+    .iter()
+    .map(|&m| ModelInfo {
+        engine: TranscriptionEngine::WhisperCpp,
+        name: serde_json::to_value(m)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default(),
+        size_mb: m.size_mb(),
+        installed: ggml_dir.join(m.filename()).exists(),
+    })
+    .collect();
     Ok(out)
 }
 
@@ -386,109 +288,6 @@ async fn download_whisper_cpp_model(
     Ok(())
 }
 
-/// A single entry returned by the HuggingFace tree API.
-#[derive(Debug, Deserialize)]
-struct HfTreeEntry {
-    /// `"file"` or `"directory"`.
-    #[serde(rename = "type")]
-    kind: String,
-    /// Repo-relative path, e.g. `"openai_whisper-tiny/config.json"`.
-    path: String,
-}
-
-/// Return every *file* path under `repo_path` in `argmaxinc/whisperkit-coreml`,
-/// by calling the HuggingFace tree API with `?recursive=true`.
-async fn list_hf_model_files(repo_path: &str) -> Result<Vec<String>, String> {
-    let url = format!(
-        "https://huggingface.co/api/models/argmaxinc/whisperkit-coreml/tree/main/{}?recursive=true",
-        repo_path
-    );
-    let client = reqwest::Client::builder()
-        .user_agent("scribe/2.3")
-        .build()
-        .map_err(|e| e.to_string())?;
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("HF tree API request failed: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!(
-            "HF tree API returned {}: {}",
-            resp.status(),
-            url
-        ));
-    }
-    let entries: Vec<HfTreeEntry> = resp
-        .json()
-        .await
-        .map_err(|e| format!("HF tree API JSON parse failed: {e}"))?;
-    Ok(entries
-        .into_iter()
-        .filter(|e| e.kind == "file")
-        .map(|e| e.path)
-        .collect())
-}
-
-/// Download WhisperKit `.mlmodelc` bundles for a given model from Argmax's
-/// HuggingFace repository (`argmaxinc/whisperkit-coreml`).
-///
-/// `.mlmodelc` bundles are *directories* (not single files), so we enumerate
-/// every file under the model subdirectory via the HuggingFace tree API, then
-/// download each file individually while preserving the directory structure.
-///
-/// `config.json` is downloaded last; its presence on disk is the sentinel that
-/// `list_models()` uses to declare the model installed.
-async fn download_whisperkit_model(
-    app: &AppHandle,
-    model: WhisperKitModel,
-) -> Result<(), String> {
-    let base_dir = whisperkit_models_dir(app)?;
-    let model_dir = base_dir.join(model.local_dir());
-
-    // Enumerate every file in the model directory.
-    let all_files = list_hf_model_files(model.repo_name()).await?;
-    if all_files.is_empty() {
-        return Err(format!(
-            "No files found for model {} — check argmaxinc/whisperkit-coreml on HuggingFace",
-            model.repo_name()
-        ));
-    }
-
-    // Sort so config.json is last (it's our "installed" sentinel).
-    let mut sorted = all_files;
-    sorted.sort_by_key(|p| if p.ends_with("config.json") { 1 } else { 0 });
-
-    let n = sorted.len() as f64;
-    let prefix = format!("{}/", model.repo_name());
-
-    for (i, repo_relative_path) in sorted.iter().enumerate() {
-        // Strip the model-directory prefix to get the file's local relative path.
-        let local_relative = repo_relative_path
-            .strip_prefix(&prefix)
-            .unwrap_or(repo_relative_path);
-
-        let dest = model_dir.join(local_relative);
-
-        // Ensure parent directories exist (e.g. AudioEncoder.mlmodelc/weights/).
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| format!("create_dir_all {}: {e}", parent.display()))?;
-        }
-
-        let url = format!(
-            "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/main/{}",
-            repo_relative_path
-        );
-        let scale = 1.0 / n;
-        let offset = i as f64 / n;
-        download_hf_file(app, &url, &dest, model.repo_name(), scale, offset).await?;
-    }
-
-    Ok(())
-}
-
 #[tauri::command]
 pub async fn download_model(
     app: AppHandle,
@@ -506,18 +305,11 @@ pub async fn download_model(
         .await;
     job.mark_running().await;
 
-    let result = match engine {
-        TranscriptionEngine::WhisperCpp => {
-            let model: WhisperModel = serde_json::from_value(serde_json::Value::String(name))
-                .map_err(|e| format!("unknown whisper-cpp model: {e}"))?;
-            download_whisper_cpp_model(&app, model).await
-        }
-        TranscriptionEngine::WhisperKit => {
-            let model: WhisperKitModel = serde_json::from_value(serde_json::Value::String(name))
-                .map_err(|e| format!("unknown whisperkit model: {e}"))?;
-            download_whisperkit_model(&app, model).await
-        }
-    };
+    // Only whisper-cpp is supported since v3.2.0.
+    let _ = engine; // always WhisperCpp
+    let model: WhisperModel = serde_json::from_value(serde_json::Value::String(name))
+        .map_err(|e| format!("unknown model: {e}"))?;
+    let result = download_whisper_cpp_model(&app, model).await;
 
     match &result {
         Ok(()) => job.mark_completed().await,
@@ -610,14 +402,7 @@ pub async fn transcribe(
         .create(
             &app,
             JobKind::Transcribe,
-            format!(
-                "Transcribing ({}) — {}",
-                match opts.engine {
-                    TranscriptionEngine::WhisperCpp => "whisper.cpp",
-                    TranscriptionEngine::WhisperKit => "WhisperKit",
-                },
-                &opts.model_name
-            ),
+            format!("Transcribing (whisper.cpp) — {}", &opts.model_name),
         )
         .await;
     job.mark_running().await;
@@ -674,15 +459,8 @@ async fn transcribe_inner(
         }
     }
 
-    // 2) Branch on engine
-    let words = match opts.engine {
-        TranscriptionEngine::WhisperCpp => {
-            transcribe_whisper_cpp(app, opts, job, &wav).await?
-        }
-        TranscriptionEngine::WhisperKit => {
-            transcribe_whisperkit(app, opts, job, &wav).await?
-        }
-    };
+    // 2) Transcribe with whisper.cpp
+    let words = transcribe_whisper_cpp(app, opts, job, &wav).await?;
 
     let _ = media_id;
 
@@ -832,113 +610,6 @@ async fn transcribe_whisper_cpp(
 }
 
 // ---------------------------------------------------------------------------
-// WhisperKit path
-// ---------------------------------------------------------------------------
-
-async fn transcribe_whisperkit(
-    app: &AppHandle,
-    opts: &TranscribeOpts,
-    job: &crate::jobs::JobHandle,
-    wav: &PathBuf,
-) -> Result<Vec<Word>, String> {
-    let wk_dir = whisperkit_models_dir(app)?;
-
-    let model_enum: WhisperKitModel =
-        serde_json::from_value(serde_json::Value::String(opts.model_name.clone()))
-            .map_err(|_| format!("unknown whisperkit model: {}", opts.model_name))?;
-
-    let model_dir = wk_dir.join(model_enum.local_dir());
-    if !model_dir.exists() {
-        return Err(format!(
-            "WhisperKit model not installed: {}. Call download_model first.",
-            model_enum.repo_name()
-        ));
-    }
-
-    // whisperkit-cli writes `<audio-stem>.json` next to the audio file when
-    // `--report` is passed.  We do NOT use `--output-dir` — that flag does not
-    // exist in the Argmax CLI; the output location is always the directory that
-    // contains the audio file.
-    let shell = app.shell();
-    let wk = shell
-        .sidecar("whisperkit-cli")
-        .map_err(|e| format!("whisperkit-cli sidecar not available: {e}"))?
-        .args([
-            "transcribe",
-            "--audio-path",
-            wav.to_str().unwrap(),
-            "--model-path",
-            model_dir.to_str().unwrap(),
-            "--word-timestamps",
-            "--report",          // write <audio-stem>.json next to the wav
-        ]);
-
-    let (mut rx, _child) = wk.spawn().map_err(|e| format!("spawn whisperkit-cli: {e}"))?;
-    let mut stderr = String::new();
-    let total_duration = opts.media_duration.max(1.0);
-
-    while let Some(ev) = rx.recv().await {
-        match ev {
-            CommandEvent::Stderr(line) => {
-                let line = String::from_utf8_lossy(&line).to_string();
-                stderr.push_str(&line);
-                stderr.push('\n');
-                // WhisperKit prints "Progress: 0.42" style lines on stderr.
-                if let Some(p) = parse_whisperkit_progress(&line) {
-                    app.emit(
-                        "transcribe:progress",
-                        TranscribeProgress {
-                            media_id: opts.media_id.clone(),
-                            progress: p.clamp(0.02, 0.99),
-                            current_time: p * total_duration,
-                        },
-                    )
-                    .ok();
-                    let eta = ((total_duration * (1.0 - p)).max(0.0)) as i64;
-                    job.set_progress(p, Some(eta)).await;
-                }
-            }
-            CommandEvent::Stdout(line) => {
-                // whisperkit-cli also writes progress to stdout in some versions.
-                let line = String::from_utf8_lossy(&line).to_string();
-                if let Some(p) = parse_whisperkit_progress(&line) {
-                    let progress = p.clamp(0.02, 0.99);
-                    app.emit(
-                        "transcribe:progress",
-                        TranscribeProgress {
-                            media_id: opts.media_id.clone(),
-                            progress,
-                            current_time: progress * total_duration,
-                        },
-                    )
-                    .ok();
-                }
-            }
-            CommandEvent::Terminated(t) => {
-                if t.code != Some(0) {
-                    return Err(format!("whisperkit-cli failed: {}", stderr.trim()));
-                }
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // whisperkit-cli writes `<audio-stem>.json` in the same directory as the
-    // wav file when --report is passed.
-    let json_path = wav.with_extension("json");
-    let json = fs::read_to_string(&json_path)
-        .await
-        .map_err(|e| format!("reading whisperkit json {}: {}", json_path.display(), e))?;
-    let words = parse_whisperkit_json(&json).map_err(|e| e.to_string())?;
-
-    let _ = fs::remove_file(wav).await;
-    let _ = fs::remove_file(&json_path).await;
-
-    Ok(words)
-}
-
-// ---------------------------------------------------------------------------
 // Progress line parsers
 // ---------------------------------------------------------------------------
 
@@ -953,38 +624,6 @@ fn parse_progress_line(line: &str) -> Option<f64> {
     let end = line[arrow + 4..].find(']')?;
     let ts = &line[arrow + 4..arrow + 4 + end];
     parse_timestamp(ts)
-}
-
-/// Parse a WhisperKit progress line.
-///
-/// WhisperKit CLI emits lines like:
-///   `  Progress: 42%`
-///   `transcribing segment 5 / 12`
-///
-/// We handle both forms and return a 0.0–1.0 fraction.
-fn parse_whisperkit_progress(line: &str) -> Option<f64> {
-    let line = line.trim();
-
-    // "Progress: 42%" or "Progress: 0.42"
-    if let Some(rest) = line.strip_prefix("Progress:") {
-        let rest = rest.trim().trim_end_matches('%');
-        if let Ok(v) = rest.parse::<f64>() {
-            return Some(if v > 1.0 { v / 100.0 } else { v });
-        }
-    }
-
-    // "transcribing segment N / M"
-    if line.to_ascii_lowercase().contains("segment") {
-        let nums: Vec<u64> = line
-            .split_whitespace()
-            .filter_map(|w| w.trim_end_matches('/').parse().ok())
-            .collect();
-        if nums.len() >= 2 {
-            return Some(nums[0] as f64 / nums[1] as f64);
-        }
-    }
-
-    None
 }
 
 fn parse_timestamp(s: &str) -> Option<f64> {
@@ -1023,25 +662,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_whisperkit_progress_percent() {
-        assert_eq!(parse_whisperkit_progress("Progress: 42%"), Some(0.42));
-        assert_eq!(parse_whisperkit_progress("  Progress: 100%"), Some(1.0));
-    }
-
-    #[test]
-    fn parses_whisperkit_progress_fraction() {
-        // Some builds emit a 0-1 float rather than a percentage.
-        let v = parse_whisperkit_progress("Progress: 0.75").unwrap();
-        assert!((v - 0.75).abs() < 1e-9);
-    }
-
-    #[test]
-    fn parses_whisperkit_segment_progress() {
-        let v = parse_whisperkit_progress("transcribing segment 3 / 12").unwrap();
-        assert!((v - 0.25).abs() < 1e-9);
-    }
-
-    #[test]
     fn coreml_encoder_names() {
         assert_eq!(
             WhisperModel::Tiny.coreml_encoder_dir(),
@@ -1058,15 +678,6 @@ mod tests {
     }
 
     #[test]
-    fn whisperkit_model_repo_names() {
-        assert_eq!(
-            WhisperKitModel::LargeV3Turbo.repo_name(),
-            "openai_whisper-large-v3-turbo"
-        );
-        assert_eq!(WhisperKitModel::Tiny.repo_name(), "openai_whisper-tiny");
-    }
-
-    #[test]
     fn transcription_engine_default_is_whisper_cpp() {
         let engine = TranscriptionEngine::default();
         assert_eq!(engine, TranscriptionEngine::WhisperCpp);
@@ -1074,9 +685,6 @@ mod tests {
 
     #[test]
     fn transcription_engine_deserialises_from_json() {
-        let e: TranscriptionEngine =
-            serde_json::from_str("\"whisper-kit\"").unwrap();
-        assert_eq!(e, TranscriptionEngine::WhisperKit);
         let e: TranscriptionEngine =
             serde_json::from_str("\"whisper-cpp\"").unwrap();
         assert_eq!(e, TranscriptionEngine::WhisperCpp);

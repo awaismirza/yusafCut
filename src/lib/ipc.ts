@@ -34,29 +34,22 @@ export function stopNativeRecording(): Promise<string> {
 // Transcription
 // ---------------------------------------------------------------------------
 
-/** Which inference backend to use. Mirrors Rust's TranscriptionEngine. */
-export type TranscriptionEngine = "whisper-cpp" | "whisper-kit";
+/**
+ * Transcription engine — whisper.cpp only.
+ *
+ * WhisperKit (ANE) was removed in v3.2.0 due to word-timestamp inaccuracies
+ * that caused video/text drift. To restore it, see commit 4726d25.
+ */
+export type TranscriptionEngine = "whisper-cpp";
 
 /** whisper.cpp GGML model names (kebab-case, matches Rust WhisperModel). */
 export type WhisperModel = "tiny" | "base" | "small" | "medium" | "large-v3-turbo";
 
-/** WhisperKit Core ML model repo names (matches Rust WhisperKitModel). */
-export type WhisperKitModel =
-  | "openai_whisper-tiny"
-  | "openai_whisper-base"
-  | "openai_whisper-small"
-  | "openai_whisper-large-v3-turbo"
-  | "openai_whisper-large-v3";
-
 export interface TranscribeOptions {
   mediaId: string;
   mediaPath: string;
-  /**
-   * Which engine to use. Defaults to "whisper-cpp".
-   * Pass a WhisperKitModel string when engine is "whisper-kit".
-   */
   engine?: TranscriptionEngine;
-  modelName: WhisperModel | WhisperKitModel;
+  modelName: WhisperModel;
   /** Total media duration in seconds — used to compute 0..1 progress. */
   mediaDuration?: number;
   /**
@@ -64,15 +57,11 @@ export interface TranscribeOptions {
    * Omit or pass "auto" to let Whisper detect the language.
    */
   language?: string;
-  /**
-   * When true, Whisper outputs English regardless of the source language.
-   * Only meaningful for whisper-cpp; ignored by WhisperKit.
-   */
+  /** When true, Whisper outputs English regardless of the source language. */
   translate?: boolean;
   /**
    * When true, whisper-cli attempts to identify speakers via --diarize.
    * Requires whisper.cpp built with diarisation support.
-   * Only meaningful for whisper-cpp.
    */
   diarize?: boolean;
 }
@@ -80,7 +69,6 @@ export interface TranscribeOptions {
 export interface TranscribeResult {
   mediaId: string;
   words: Word[];
-  /** Which engine produced this result. */
   engine: TranscriptionEngine;
 }
 
@@ -110,9 +98,8 @@ export function onTranscribeProgress(
 // ---------------------------------------------------------------------------
 
 export interface ModelInfo {
-  /** Which engine this model belongs to. */
   engine: TranscriptionEngine;
-  /** Model identifier — WhisperModel slug or WhisperKitModel repo name. */
+  /** WhisperModel slug, e.g. "large-v3-turbo". */
   name: string;
   /** Approximate disk size in MB. */
   sizeMb: number;

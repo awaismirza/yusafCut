@@ -16,7 +16,7 @@ An open-source desktop video editor for macOS (Apple Silicon) where **the transc
 
 - **Edit video like a Google Doc.** The transcript is the primary editing surface.
 - **Fully local.** Works on a plane. Your footage never leaves your machine.
-- **Apple Silicon native.** Whisper runs on Metal/ANE. LLM features use MLX. Video uses VideoToolbox hardware encode/decode.
+- **Apple Silicon native.** Whisper runs via whisper.cpp with Core ML + Metal. LLM features use MLX. Video uses VideoToolbox hardware encode/decode.
 - **Open source.** Anyone can audit, fork, or self-host.
 
 ### Explicit non-goals (v1)

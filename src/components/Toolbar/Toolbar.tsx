@@ -31,8 +31,6 @@ import {
   transcribe,
   type ModelInfo,
   type RecordingMode,
-  type TranscriptionEngine,
-  type WhisperKitModel,
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -82,14 +80,6 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "small", label: "Small", sizeMb: 466 },
   { name: "medium", label: "Medium", sizeMb: 1500 },
   { name: "large-v3-turbo", label: "Large v3 Turbo (recommended)", sizeMb: 1600 },
-];
-
-const WK_MODELS: { name: WhisperKitModel; label: string; sizeMb: number }[] = [
-  { name: "openai_whisper-tiny", label: "Tiny (~77 MB)", sizeMb: 77 },
-  { name: "openai_whisper-base", label: "Base (~190 MB)", sizeMb: 190 },
-  { name: "openai_whisper-small", label: "Small (~640 MB)", sizeMb: 640 },
-  { name: "openai_whisper-large-v3-turbo", label: "Large v3 Turbo · ANE (recommended)", sizeMb: 1700 },
-  { name: "openai_whisper-large-v3", label: "Large v3 · ANE (highest accuracy)", sizeMb: 3090 },
 ];
 
 /** ISO 639-1 languages Whisper supports well. */
@@ -183,9 +173,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [transcribeEngine, setTranscribeEngine] = useState<TranscriptionEngine>("whisper-cpp");
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("large-v3-turbo");
-  const [selectedWKModel, setSelectedWKModel] = useState<WhisperKitModel>("openai_whisper-large-v3-turbo");
   const [transcribeLanguage, setTranscribeLanguage] = useState("auto");
   const [transcribeTranslate, setTranscribeTranslate] = useState(false);
   const [transcribeDiarize, setTranscribeDiarize] = useState(false);
@@ -317,7 +305,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     const modelLabel = MODELS.find((m) => m.name === selectedModel)?.label ?? selectedModel;
     pushToast({
       title: `Downloading ${modelLabel}…`,
-      description: "Needed once before local auto-transcription can run.",
+      description: "Needed once before local transcription can run.",
     });
     await downloadModel("whisper-cpp", selectedModel);
     setInstalledModels((prev) =>
@@ -339,8 +327,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       const result = await transcribe({
         mediaId: media.id,
         mediaPath: media.path,
-        engine: transcribeEngine,
-        modelName: transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel,
+        engine: "whisper-cpp",
+        modelName: selectedModel,
         mediaDuration: media.duration,
         language: transcribeLanguage === "auto" ? undefined : transcribeLanguage,
         translate: transcribeTranslate,
@@ -457,17 +445,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     unlistenDownloadRef.current = unlisten;
 
     try {
-      await downloadModel(transcribeEngine, name);
+      await downloadModel("whisper-cpp", name);
       // Mark as installed in local state immediately.
       setInstalledModels((prev) =>
         prev.map((m) => (m.name === name ? { ...m, installed: true } : m)),
       );
       // Auto-select the freshly downloaded model.
-      if (transcribeEngine === "whisper-kit") {
-        setSelectedWKModel(name as WhisperKitModel);
-      } else {
-        setSelectedModel(name as WhisperModel);
-      }
+      setSelectedModel(name as WhisperModel);
     } catch (err) {
       pushToast({
         title: "Download failed",
@@ -513,14 +497,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
     try {
       // ── Step 1: download the model if it isn't on disk yet ──────────────
-      const activeModel = transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel;
-      const isInstalled = installedModels.find((m) => m.name === activeModel)?.installed ?? false;
+      const isInstalled = installedModels.find((m) => m.name === selectedModel)?.installed ?? false;
       if (!isInstalled) {
         pushToast({
-          title: `Downloading ${activeModel}…`,
+          title: `Downloading ${selectedModel}…`,
           description: "This may take a few minutes. Progress shown in the toolbar.",
         });
-        await downloadModel(transcribeEngine, activeModel);
+        await downloadModel("whisper-cpp", selectedModel);
         pushToast({ title: "Model downloaded — starting transcription…" });
       }
 
@@ -551,8 +534,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             await transcribe({
               mediaId,
               mediaPath: media.path,
-              engine: transcribeEngine,
-              modelName: transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel,
+              engine: "whisper-cpp",
+              modelName: selectedModel,
               mediaDuration: media.duration,
               language: transcribeLanguage === "auto" ? undefined : transcribeLanguage,
               translate: transcribeTranslate,
@@ -792,6 +775,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                       filters: [{ name: "Scribe project", extensions: ["scribe"] }],
                     });
                     if (typeof path !== "string") return;
+                    setMediaLoading(true);
                     try {
                       const loaded = await loadProject(path);
                       cacheProjectTranscripts(loaded);
@@ -804,6 +788,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                         description: String(err),
                         variant: "destructive",
                       });
+                    } finally {
+                      setMediaLoading(false);
                     }
                   }}
                 >
@@ -841,6 +827,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                   filters: [{ name: "Scribe project", extensions: ["scribe"] }],
                 });
                 if (typeof path !== "string") return;
+                setMediaLoading(true);
                 try {
                   const loaded = await loadProject(path);
                   cacheProjectTranscripts(loaded);
@@ -853,6 +840,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                     description: String(err),
                     variant: "destructive",
                   });
+                } finally {
+                  setMediaLoading(false);
                 }
               }}
             >
@@ -1055,54 +1044,20 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             </DialogDescription>
           </DialogHeader>
 
-          {/* ── Engine picker ── */}
-          <div className="flex gap-1 rounded-md border border-border p-1">
-            {(["whisper-cpp", "whisper-kit"] as TranscriptionEngine[]).map((eng) => (
-              <button
-                key={eng}
-                type="button"
-                className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
-                  transcribeEngine === eng
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent"
-                }`}
-                onClick={() => setTranscribeEngine(eng)}
-              >
-                {eng === "whisper-cpp"
-                  ? "whisper.cpp · Core ML ✓"
-                  : "WhisperKit · ANE (experimental)"}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Engine description ── */}
+          {/* ── Engine info ── */}
           <p className="text-xs text-muted-foreground rounded-md border border-border px-3 py-2">
-            {transcribeEngine === "whisper-cpp" ? (
-              <>
-                <span className="font-semibold text-foreground">Recommended.</span>{" "}
-                Uses whisper.cpp with a Core ML encoder for fast, accurate transcription
-                with tight word-level timestamps. Best choice for video/text sync.
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-amber-500">Experimental.</span>{" "}
-                WhisperKit uses Apple Neural Engine via quantized models. Faster on
-                M-series, but word timestamps may be less precise — you may notice
-                slight video/text drift. Use whisper.cpp if sync accuracy matters.
-              </>
-            )}
+            <span className="font-semibold text-foreground">whisper.cpp · Core ML</span>
+            {" "}— runs 100% locally with Apple Silicon acceleration. Tight word-level
+            timestamps for accurate video/text sync.
           </p>
 
           {/* ── Model list ── */}
           <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
-            {(transcribeEngine === "whisper-cpp" ? MODELS : WK_MODELS).map((m) => {
+            {MODELS.map((m) => {
               const installed = installedModels.find((i) => i.name === m.name)?.installed ?? false;
               const isDownloading = downloadingModel === m.name;
               const isOtherDownloading = downloadingModel !== null && !isDownloading;
-              const isSelected =
-                transcribeEngine === "whisper-cpp"
-                  ? selectedModel === m.name
-                  : selectedWKModel === m.name;
+              const isSelected = selectedModel === m.name;
 
               return (
                 <div
@@ -1119,13 +1074,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                         value={m.name}
                         checked={isSelected}
                         disabled={!installed}
-                        onChange={() => {
-                          if (transcribeEngine === "whisper-cpp") {
-                            setSelectedModel(m.name as WhisperModel);
-                          } else {
-                            setSelectedWKModel(m.name as WhisperKitModel);
-                          }
-                        }}
+                        onChange={() => setSelectedModel(m.name as WhisperModel)}
                       />
                       {m.label}
                     </label>
@@ -1186,37 +1135,35 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               </select>
             </label>
 
-            {/* translate + diarize — only meaningful for whisper.cpp */}
-            {transcribeEngine === "whisper-cpp" && (
-              <div className="flex flex-col gap-2">
-                <label className="flex cursor-pointer items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={transcribeTranslate}
-                    onChange={(e) => setTranscribeTranslate(e.target.checked)}
-                  />
-                  <span>
-                    <span className="font-medium">Translate to English</span>
-                    <span className="ml-1 text-muted-foreground">
-                      — output English regardless of source
-                    </span>
+            {/* translate + diarize */}
+            <div className="flex flex-col gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={transcribeTranslate}
+                  onChange={(e) => setTranscribeTranslate(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Translate to English</span>
+                  <span className="ml-1 text-muted-foreground">
+                    — output English regardless of source
                   </span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={transcribeDiarize}
-                    onChange={(e) => setTranscribeDiarize(e.target.checked)}
-                  />
-                  <span>
-                    <span className="font-medium">Speaker diarisation</span>
-                    <span className="ml-1 text-muted-foreground">
-                      — label who is speaking
-                    </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={transcribeDiarize}
+                  onChange={(e) => setTranscribeDiarize(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Speaker diarisation</span>
+                  <span className="ml-1 text-muted-foreground">
+                    — label who is speaking
                   </span>
-                </label>
-              </div>
-            )}
+                </span>
+              </label>
+            </div>
           </div>
 
           <DialogFooter>
@@ -1231,9 +1178,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               onClick={startTranscribe}
               disabled={
                 downloadingModel !== null ||
-                !(transcribeEngine === "whisper-cpp"
-                  ? installedModels.find((m) => m.name === selectedModel)?.installed
-                  : installedModels.find((m) => m.name === selectedWKModel)?.installed)
+                !installedModels.find((m) => m.name === selectedModel)?.installed
               }
               variant={forceRetranscribeRef.current ? "destructive" : "default"}
             >
