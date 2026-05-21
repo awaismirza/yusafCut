@@ -71,14 +71,34 @@ pub fn parse_whisper_json(json: &str) -> Result<Vec<Word>> {
 }
 
 fn token_offsets_ms(seg: &WhisperOffsets, tok: &WhisperOffsets) -> (u64, u64) {
-    // Current whisper.cpp JSON emits token t0/t1 as absolute audio offsets.
-    // Some older/alternate wrappers emit token offsets relative to the segment,
-    // so we accept both to avoid either doubled timestamps or zero-based drift.
-    if tok.from >= seg.from && tok.to <= seg.to {
+    // whisper.cpp `--output-json-full` (post-~1.5.0) emits token t0/t1 as
+    // *absolute* millisecond offsets in the source audio timeline.
+    //
+    // Some older/alternative builds emit token offsets *relative* to the
+    // segment start instead. We distinguish the two forms by checking whether
+    // the token range is plausibly contained within the segment range:
+    //
+    //   absolute  → tok.from ∈ [seg.from, seg.to]  (or at least tok.from >= seg.from)
+    //   relative  → tok.from is small (< seg.from), add seg.from to both
+    //
+    // Edge case: when seg.from == 0 both interpretations look identical.
+    // In that case we trust the token offsets directly (absolute), because
+    // the segment-relative form would produce the same values anyway.
+    //
+    // We also guard against tokens whose `to` accidentally undershoots `from`
+    // (corrupted JSON): clamp `to` to at least `from + 1 ms` so the editor
+    // never shows a zero-duration word.
+    let (start, end) = if seg.from == 0 || tok.from >= seg.from {
+        // Absolute offsets — use directly.
         (tok.from, tok.to)
     } else {
+        // Relative offsets — add segment start.
         (seg.from + tok.from, seg.from + tok.to)
-    }
+    };
+
+    // Safety clamp: ensure end > start (a zero-width word causes visual glitches).
+    let end = end.max(start + 1);
+    (start, end)
 }
 
 fn ms_to_sec(ms: u64) -> f64 {

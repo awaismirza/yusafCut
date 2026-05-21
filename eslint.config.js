@@ -41,6 +41,15 @@ export default [
         ResizeObserver: "readonly",
         DOMException: "readonly",
         MediaError: "readonly",
+        // Animation / rendering
+        requestAnimationFrame: "readonly",
+        cancelAnimationFrame: "readonly",
+        // DOM element types (extended)
+        HTMLSpanElement: "readonly",
+        HTMLSelectElement: "readonly",
+        HTMLTextAreaElement: "readonly",
+        HTMLAnchorElement: "readonly",
+        HTMLLabelElement: "readonly",
         // DOM event types
         KeyboardEvent: "readonly",
         MouseEvent: "readonly",

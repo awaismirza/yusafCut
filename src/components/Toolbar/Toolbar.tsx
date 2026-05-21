@@ -8,6 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { replaceProjectBaseline, useProjectStore } from "@/stores/projectStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -33,6 +40,7 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   Captions,
   CheckCircle2,
+  ChevronDown,
   Download,
   FilePlus2,
   FolderOpen,
@@ -166,6 +174,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const exportingProgress = useUIStore((s) => s.exportingProgress);
   const modelDownloadProgress = useUIStore((s) => s.modelDownloadProgress);
   const mediaLoading = useUIStore((s) => s.mediaLoading);
+  const editOperationLabel = useUIStore((s) => s.editOperationLabel);
   const pushToast = useUIStore((s) => s.pushToast);
   const setMediaLoading = useUIStore((s) => s.setMediaLoading);
   const setExportingProgress = useUIStore((s) => s.setExportingProgress);
@@ -204,6 +213,20 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const unlistenDownloadRef = useRef<(() => void) | null>(null);
   /** Set to true before opening the model dialog when the user clicks Re-Transcribe. */
   const forceRetranscribeRef = useRef(false);
+
+  // ── Responsive toolbar: collapse tool groups into dropdowns when narrow ──
+  const toolbarBottomRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const el = toolbarBottomRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setCompact(entry.contentRect.width < 860);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   /** True when at least one segment already has transcribed words. */
   const hasTranscript = project.segments.some((s) => s.words.length > 0);
@@ -731,109 +754,215 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         </div>
       </div>
 
-      <div className="editor-toolbar-bottom">
-        <div className="tool-group">
-          <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
-            <FolderOpen className="h-4 w-4" /> Open Media
-          </Button>
-          <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
-            <Scissors className="h-4 w-4" /> Add Clip
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            onClick={() => {
-              replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
-              resetPlayer();
-            }}
-          >
-            <FilePlus2 className="h-4 w-4" /> New
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            onClick={async () => {
-              const path = await openDialog({
-                multiple: false,
-                filters: [{ name: "Scribe project", extensions: ["scribe"] }],
-              });
-              if (typeof path !== "string") return;
-              try {
-                const loaded = await loadProject(path);
-                cacheProjectTranscripts(loaded);
-                replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+      <div className="editor-toolbar-bottom" ref={toolbarBottomRef}>
+        {/* ── Left tool group ── */}
+        {compact ? (
+          <div className="tool-group">
+            {/* Always-visible: Open + Save */}
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+              <FolderOpen className="h-4 w-4" /> Open
+            </Button>
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+              <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+            </Button>
+            {/* Overflow: Add Clip, New, Open Project */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="tool-button">
+                  More <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[160px]">
+                <DropdownMenuItem onClick={handleAddClip}>
+                  <Scissors className="h-4 w-4 mr-2" /> Add Clip
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
+                    resetPlayer();
+                  }}
+                >
+                  <FilePlus2 className="h-4 w-4 mr-2" /> New Project
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const path = await openDialog({
+                      multiple: false,
+                      filters: [{ name: "Scribe project", extensions: ["scribe"] }],
+                    });
+                    if (typeof path !== "string") return;
+                    try {
+                      const loaded = await loadProject(path);
+                      cacheProjectTranscripts(loaded);
+                      replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+                      resetPlayer();
+                      pushToast({ title: "Project opened", description: path });
+                    } catch (err) {
+                      pushToast({
+                        title: "Failed to open project",
+                        description: String(err),
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" /> Open Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <div className="tool-group">
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+              <FolderOpen className="h-4 w-4" /> Open Media
+            </Button>
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
+              <Scissors className="h-4 w-4" /> Add Clip
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              onClick={() => {
+                replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
                 resetPlayer();
-                pushToast({ title: "Project opened", description: path });
-              } catch (err) {
-                pushToast({
-                  title: "Failed to open project",
-                  description: String(err),
-                  variant: "destructive",
+              }}
+            >
+              <FilePlus2 className="h-4 w-4" /> New
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              onClick={async () => {
+                const path = await openDialog({
+                  multiple: false,
+                  filters: [{ name: "Scribe project", extensions: ["scribe"] }],
                 });
-              }
-            }}
-          >
-            <FolderOpen className="h-4 w-4" /> Project
-          </Button>
-          <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
-            <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
-          </Button>
-        </div>
+                if (typeof path !== "string") return;
+                try {
+                  const loaded = await loadProject(path);
+                  cacheProjectTranscripts(loaded);
+                  replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+                  resetPlayer();
+                  pushToast({ title: "Project opened", description: path });
+                } catch (err) {
+                  pushToast({
+                    title: "Failed to open project",
+                    description: String(err),
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              <FolderOpen className="h-4 w-4" /> Project
+            </Button>
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+              <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+            </Button>
+          </div>
+        )}
 
         <Toolbox onFindClick={onFindClick} />
 
-        <div className="tool-group">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            onClick={() => setRecordDialogOpen(true)}
-          >
-            <Radio className="h-4 w-4" /> Record
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            title="Music tracks (ducked under voice on export)"
-            onClick={() => setMusicDialogOpen(true)}
-          >
-            <Music className="h-4 w-4" /> Music
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            title="Project snapshots (named restore points)"
-            onClick={() => setSnapshotsDialogOpen(true)}
-          >
-            <History className="h-4 w-4" /> Snapshots
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button tool-button-primary"
-            title={
-              hasTranscript
-                ? "Clear existing transcript and re-run Whisper from scratch"
-                : "Transcribe audio with Whisper"
-            }
-            onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
-          >
-            <MicVocal className="h-4 w-4" />
-            {hasTranscript ? "Re-Transcribe" : "Transcribe"}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button tool-button-danger"
-            onClick={handleCloseProject}
-          >
-            <Power className="h-4 w-4" /> Close
-          </Button>
-        </div>
+        {/* ── Right tool group ── */}
+        {compact ? (
+          <div className="tool-group">
+            {/* Always-visible: Transcribe (most important action) */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button tool-button-primary"
+              title={
+                hasTranscript
+                  ? "Clear existing transcript and re-run Whisper from scratch"
+                  : "Transcribe audio with Whisper"
+              }
+              onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
+            >
+              <MicVocal className="h-4 w-4" />
+              {hasTranscript ? "Re-Transcribe" : "Transcribe"}
+            </Button>
+            {/* Overflow: Record, Music, Snapshots, Close */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="tool-button">
+                  More <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                <DropdownMenuItem onClick={() => setRecordDialogOpen(true)}>
+                  <Radio className="h-4 w-4 mr-2" /> Record
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMusicDialogOpen(true)}>
+                  <Music className="h-4 w-4 mr-2" /> Music
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
+                  <History className="h-4 w-4 mr-2" /> Snapshots
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={handleCloseProject}
+                >
+                  <Power className="h-4 w-4 mr-2" /> Close Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <div className="tool-group">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              onClick={() => setRecordDialogOpen(true)}
+            >
+              <Radio className="h-4 w-4" /> Record
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              title="Music tracks (ducked under voice on export)"
+              onClick={() => setMusicDialogOpen(true)}
+            >
+              <Music className="h-4 w-4" /> Music
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              title="Project snapshots (named restore points)"
+              onClick={() => setSnapshotsDialogOpen(true)}
+            >
+              <History className="h-4 w-4" /> Snapshots
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button tool-button-primary"
+              title={
+                hasTranscript
+                  ? "Clear existing transcript and re-run Whisper from scratch"
+                  : "Transcribe audio with Whisper"
+              }
+              onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
+            >
+              <MicVocal className="h-4 w-4" />
+              {hasTranscript ? "Re-Transcribe" : "Transcribe"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button tool-button-danger"
+              onClick={handleCloseProject}
+            >
+              <Power className="h-4 w-4" /> Close
+            </Button>
+          </div>
+        )}
       </div>
 
       <Dialog
@@ -939,10 +1068,30 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                 }`}
                 onClick={() => setTranscribeEngine(eng)}
               >
-                {eng === "whisper-cpp" ? "whisper.cpp · Core ML" : "WhisperKit · ANE"}
+                {eng === "whisper-cpp"
+                  ? "whisper.cpp · Core ML ✓"
+                  : "WhisperKit · ANE (experimental)"}
               </button>
             ))}
           </div>
+
+          {/* ── Engine description ── */}
+          <p className="text-xs text-muted-foreground rounded-md border border-border px-3 py-2">
+            {transcribeEngine === "whisper-cpp" ? (
+              <>
+                <span className="font-semibold text-foreground">Recommended.</span>{" "}
+                Uses whisper.cpp with a Core ML encoder for fast, accurate transcription
+                with tight word-level timestamps. Best choice for video/text sync.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-amber-500">Experimental.</span>{" "}
+                WhisperKit uses Apple Neural Engine via quantized models. Faster on
+                M-series, but word timestamps may be less precise — you may notice
+                slight video/text drift. Use whisper.cpp if sync accuracy matters.
+              </>
+            )}
+          </p>
 
           {/* ── Model list ── */}
           <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
@@ -1370,6 +1519,28 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Model download</span>
               <span>{Math.round((modelDownloadProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Generic "operation in progress" dialog (Trim silences, etc.) ── */}
+      <Dialog open={editOperationLabel !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="h-4 w-4 text-primary" />
+              {editOperationLabel ?? "Processing…"}
+            </DialogTitle>
+            <DialogDescription>
+              Applying edits to the project — this will complete shortly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress indeterminate />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Working…</span>
+              <span>Please wait</span>
             </div>
           </div>
         </DialogContent>

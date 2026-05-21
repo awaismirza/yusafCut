@@ -30,6 +30,7 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   const addChapter = useProjectStore((s) => s.addChapter);
   const setChapters = useProjectStore((s) => s.setChapters);
   const pushToast = useUIStore((s) => s.pushToast);
+  const setEditOperationLabel = useUIStore((s) => s.setEditOperationLabel);
   const [detectingChapters, setDetectingChapters] = useState(false);
   const [suggestingBroll, setSuggestingBroll] = useState(false);
   const [brollSuggestions, setBrollSuggestions] = useState<BrollSuggestion[]>([]);
@@ -63,17 +64,30 @@ export function Toolbox({ onFindClick }: ToolboxProps) {
   }
 
   function handleRemoveSilences() {
-    const removed = removeSilences();
-    if (removed === 0) {
-      pushToast({
-        title: "Nothing to trim",
-        description: "No silences longer than 600ms found between words.",
+    // Show the loader immediately so the user sees feedback while the main
+    // thread is busy applying the silence-removal edit. We defer the actual
+    // work by one rAF so React has time to paint the dialog first.
+    setEditOperationLabel("Trimming silences…");
+    requestAnimationFrame(() => {
+      // A second rAF ensures the browser has committed the paint.
+      requestAnimationFrame(() => {
+        try {
+          const removed = removeSilences();
+          if (removed === 0) {
+            pushToast({
+              title: "Nothing to trim",
+              description: "No silences longer than 600ms found between words.",
+            });
+          } else {
+            pushToast({
+              title: `Trimmed ${removed} silence${removed === 1 ? "" : "s"}`,
+              description: "Use ⌘Z to restore.",
+            });
+          }
+        } finally {
+          setEditOperationLabel(null);
+        }
       });
-      return;
-    }
-    pushToast({
-      title: `Trimmed ${removed} silence${removed === 1 ? "" : "s"}`,
-      description: "Use ⌘Z to restore.",
     });
   }
 

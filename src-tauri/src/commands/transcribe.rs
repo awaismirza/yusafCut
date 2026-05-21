@@ -743,8 +743,23 @@ async fn transcribe_whisper_cpp(
         "-m".into(), model_str,
         "-f".into(), wav_str,
         "--output-json-full".into(),
-        "--word-thold".into(), "0.01".into(),
+        // ── Timestamp accuracy flags ─────────────────────────────────────
+        // Split tokens at word boundaries so each Word gets its own tight
+        // start/end offset rather than inheriting the whole segment range.
         "--split-on-word".into(),
+        // Low probability threshold: keep all tokens, even uncertain ones.
+        // The editor always shows every word; users decide what to delete.
+        "--word-thold".into(), "0.01".into(),
+        // Disable the maximum-segment-length cap. When max-len is set,
+        // whisper can rush short segments to hit the token budget, which
+        // compresses timestamps and causes video/text drift. Setting it to
+        // 0 lets each segment run as long as needed for accurate timing.
+        "--max-len".into(), "0".into(),
+        // Use beam search with 5 candidates for better transcript quality.
+        // This has no impact on timing but reduces hallucinations that can
+        // also throw off the word index ↔ timestamp mapping.
+        "--best-of".into(), "5".into(),
+        "--beam-size".into(), "5".into(),
     ];
     if !use_coreml {
         whisper_args.push("--no-gpu".into());
