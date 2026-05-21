@@ -539,6 +539,28 @@ async fn transcribe_whisper_cpp(
         "--best-of".into(), "5".into(),
         "--beam-size".into(), "5".into(),
     ];
+
+    // DTW-based word timestamp refinement (whisper.cpp ≥ 1.5).
+    // Uses Dynamic Time Warping on the mel spectrogram to pin each word's
+    // start/end to its actual audio onset — brings timing accuracy from
+    // ~100 ms down to ~20 ms, similar to Descript-grade forced alignment.
+    // Only available for the standard model sizes; large-v3-turbo and other
+    // distilled variants are not in the DTW model list so we skip them.
+    let dtw_ident: Option<&str> = match opts.model_name.as_str() {
+        "tiny"   => Some("tiny"),
+        "base"   => Some("base"),
+        "small"  => Some("small"),
+        "medium" => Some("medium"),
+        "large-v1" => Some("large-v1"),
+        "large-v2" => Some("large-v2"),
+        "large-v3" => Some("large-v3"),
+        _ => None,
+    };
+    if let Some(dtw) = dtw_ident {
+        whisper_args.push("--dtw".into());
+        whisper_args.push(dtw.into());
+    }
+
     if !use_coreml {
         whisper_args.push("--no-gpu".into());
     }

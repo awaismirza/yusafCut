@@ -758,14 +758,14 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
           <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
             <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
           </Button>
-          {/* File ▾ — less-frequent project management actions */}
+          {/* File ▾ — project management, snapshots, and lifecycle */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="ghost" className="tool-button">
                 File <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[170px]">
+            <DropdownMenuContent align="start" className="min-w-[180px]">
               <DropdownMenuItem onClick={handleAddClip}>
                 <Scissors className="h-4 w-4 mr-2" /> Add Clip
               </DropdownMenuItem>
@@ -775,6 +775,17 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void handleOpenProject()}>
                 <FolderOpen className="h-4 w-4 mr-2" /> Open Project
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
+                <History className="h-4 w-4 mr-2" /> Snapshots
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={handleCloseProject}
+              >
+                <Power className="h-4 w-4 mr-2" /> Close project
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -811,26 +822,6 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setMusicDialogOpen(true)}>
                 <Music className="h-4 w-4 mr-2" /> Music tracks
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* Project ▾ — history and project lifecycle */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="tool-button">
-                Project <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[160px]">
-              <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
-                <History className="h-4 w-4 mr-2" /> Snapshots
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={handleCloseProject}
-              >
-                <Power className="h-4 w-4 mr-2" /> Close project
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -8,7 +8,7 @@ Delete words, the corresponding video disappears. Reorder paragraphs, the video
 reorders. Everything runs 100% locally using your Mac's CPU/GPU/Neural Engine
 — no cloud, no telemetry, no API keys required.
 
-Scribe 3.5.0 is production-ready for local-first transcript editing, timeline
+Scribe 3.6.0 is production-ready for local-first transcript editing, timeline
 preview, and MP4 export on Apple Silicon Macs. See [`scribe-spec.md`](scribe-spec.md)
 for the full design document.
 
@@ -29,6 +29,8 @@ for the full design document.
 | Toolbar smart category dropdowns (File / Capture / Project) | ✅ complete |
 | Indeterminate progress dialogs (all blocking ops) | ✅ complete |
 | One-click filler word removal (um, uh, like…) with loader | ✅ complete |
+| DTW word-timestamp refinement (whisper.cpp --dtw) | ✅ complete |
+| Cut-point pre-roll padding (80 ms default, prevents consonant clipping) | ✅ complete |
 | AI chapters + b-roll suggestions (MLX on-device) | ❌ removed in v3.4.0 — see commit 074d1d3 |
 | Timeline zoom, in/out markers | ✅ complete |
 | Speaker diarisation | ⏳ experimental (`--diarize` flag) |
