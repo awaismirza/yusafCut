@@ -8,6 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { replaceProjectBaseline, useProjectStore } from "@/stores/projectStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,8 +31,6 @@ import {
   transcribe,
   type ModelInfo,
   type RecordingMode,
-  type TranscriptionEngine,
-  type WhisperKitModel,
   type WhisperModel,
 } from "@/lib/ipc";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -33,6 +38,7 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   Captions,
   CheckCircle2,
+  ChevronDown,
   Download,
   FilePlus2,
   FolderOpen,
@@ -74,14 +80,6 @@ const MODELS: { name: WhisperModel; label: string; sizeMb: number }[] = [
   { name: "small", label: "Small", sizeMb: 466 },
   { name: "medium", label: "Medium", sizeMb: 1500 },
   { name: "large-v3-turbo", label: "Large v3 Turbo (recommended)", sizeMb: 1600 },
-];
-
-const WK_MODELS: { name: WhisperKitModel; label: string; sizeMb: number }[] = [
-  { name: "openai_whisper-tiny", label: "Tiny (~77 MB)", sizeMb: 77 },
-  { name: "openai_whisper-base", label: "Base (~190 MB)", sizeMb: 190 },
-  { name: "openai_whisper-small", label: "Small (~640 MB)", sizeMb: 640 },
-  { name: "openai_whisper-large-v3-turbo", label: "Large v3 Turbo · ANE (recommended)", sizeMb: 1700 },
-  { name: "openai_whisper-large-v3", label: "Large v3 · ANE (highest accuracy)", sizeMb: 3090 },
 ];
 
 /** ISO 639-1 languages Whisper supports well. */
@@ -166,6 +164,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const exportingProgress = useUIStore((s) => s.exportingProgress);
   const modelDownloadProgress = useUIStore((s) => s.modelDownloadProgress);
   const mediaLoading = useUIStore((s) => s.mediaLoading);
+  const editOperationLabel = useUIStore((s) => s.editOperationLabel);
   const pushToast = useUIStore((s) => s.pushToast);
   const setMediaLoading = useUIStore((s) => s.setMediaLoading);
   const setExportingProgress = useUIStore((s) => s.setExportingProgress);
@@ -174,9 +173,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [transcribeEngine, setTranscribeEngine] = useState<TranscriptionEngine>("whisper-cpp");
   const [selectedModel, setSelectedModel] = useState<WhisperModel>("large-v3-turbo");
-  const [selectedWKModel, setSelectedWKModel] = useState<WhisperKitModel>("openai_whisper-large-v3-turbo");
   const [transcribeLanguage, setTranscribeLanguage] = useState("auto");
   const [transcribeTranslate, setTranscribeTranslate] = useState(false);
   const [transcribeDiarize, setTranscribeDiarize] = useState(false);
@@ -204,6 +201,20 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   const unlistenDownloadRef = useRef<(() => void) | null>(null);
   /** Set to true before opening the model dialog when the user clicks Re-Transcribe. */
   const forceRetranscribeRef = useRef(false);
+
+  // ── Responsive toolbar: collapse tool groups into dropdowns when narrow ──
+  const toolbarBottomRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const el = toolbarBottomRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setCompact(entry.contentRect.width < 860);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   /** True when at least one segment already has transcribed words. */
   const hasTranscript = project.segments.some((s) => s.words.length > 0);
@@ -294,7 +305,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     const modelLabel = MODELS.find((m) => m.name === selectedModel)?.label ?? selectedModel;
     pushToast({
       title: `Downloading ${modelLabel}…`,
-      description: "Needed once before local auto-transcription can run.",
+      description: "Needed once before local transcription can run.",
     });
     await downloadModel("whisper-cpp", selectedModel);
     setInstalledModels((prev) =>
@@ -316,8 +327,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       const result = await transcribe({
         mediaId: media.id,
         mediaPath: media.path,
-        engine: transcribeEngine,
-        modelName: transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel,
+        engine: "whisper-cpp",
+        modelName: selectedModel,
         mediaDuration: media.duration,
         language: transcribeLanguage === "auto" ? undefined : transcribeLanguage,
         translate: transcribeTranslate,
@@ -434,17 +445,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     unlistenDownloadRef.current = unlisten;
 
     try {
-      await downloadModel(transcribeEngine, name);
+      await downloadModel("whisper-cpp", name);
       // Mark as installed in local state immediately.
       setInstalledModels((prev) =>
         prev.map((m) => (m.name === name ? { ...m, installed: true } : m)),
       );
       // Auto-select the freshly downloaded model.
-      if (transcribeEngine === "whisper-kit") {
-        setSelectedWKModel(name as WhisperKitModel);
-      } else {
-        setSelectedModel(name as WhisperModel);
-      }
+      setSelectedModel(name as WhisperModel);
     } catch (err) {
       pushToast({
         title: "Download failed",
@@ -490,14 +497,13 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
 
     try {
       // ── Step 1: download the model if it isn't on disk yet ──────────────
-      const activeModel = transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel;
-      const isInstalled = installedModels.find((m) => m.name === activeModel)?.installed ?? false;
+      const isInstalled = installedModels.find((m) => m.name === selectedModel)?.installed ?? false;
       if (!isInstalled) {
         pushToast({
-          title: `Downloading ${activeModel}…`,
+          title: `Downloading ${selectedModel}…`,
           description: "This may take a few minutes. Progress shown in the toolbar.",
         });
-        await downloadModel(transcribeEngine, activeModel);
+        await downloadModel("whisper-cpp", selectedModel);
         pushToast({ title: "Model downloaded — starting transcription…" });
       }
 
@@ -528,8 +534,8 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             await transcribe({
               mediaId,
               mediaPath: media.path,
-              engine: transcribeEngine,
-              modelName: transcribeEngine === "whisper-kit" ? selectedWKModel : selectedModel,
+              engine: "whisper-cpp",
+              modelName: selectedModel,
               mediaDuration: media.duration,
               language: transcribeLanguage === "auto" ? undefined : transcribeLanguage,
               translate: transcribeTranslate,
@@ -731,109 +737,221 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
         </div>
       </div>
 
-      <div className="editor-toolbar-bottom">
-        <div className="tool-group">
-          <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
-            <FolderOpen className="h-4 w-4" /> Open Media
-          </Button>
-          <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
-            <Scissors className="h-4 w-4" /> Add Clip
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            onClick={() => {
-              replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
-              resetPlayer();
-            }}
-          >
-            <FilePlus2 className="h-4 w-4" /> New
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            onClick={async () => {
-              const path = await openDialog({
-                multiple: false,
-                filters: [{ name: "Scribe project", extensions: ["scribe"] }],
-              });
-              if (typeof path !== "string") return;
-              try {
-                const loaded = await loadProject(path);
-                cacheProjectTranscripts(loaded);
-                replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+      <div className="editor-toolbar-bottom" ref={toolbarBottomRef}>
+        {/* ── Left tool group ── */}
+        {compact ? (
+          <div className="tool-group">
+            {/* Always-visible: Open + Save */}
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+              <FolderOpen className="h-4 w-4" /> Open
+            </Button>
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+              <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+            </Button>
+            {/* Overflow: Add Clip, New, Open Project */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="tool-button">
+                  More <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[160px]">
+                <DropdownMenuItem onClick={handleAddClip}>
+                  <Scissors className="h-4 w-4 mr-2" /> Add Clip
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
+                    resetPlayer();
+                  }}
+                >
+                  <FilePlus2 className="h-4 w-4 mr-2" /> New Project
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const path = await openDialog({
+                      multiple: false,
+                      filters: [{ name: "Scribe project", extensions: ["scribe"] }],
+                    });
+                    if (typeof path !== "string") return;
+                    setMediaLoading(true);
+                    try {
+                      const loaded = await loadProject(path);
+                      cacheProjectTranscripts(loaded);
+                      replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+                      resetPlayer();
+                      pushToast({ title: "Project opened", description: path });
+                    } catch (err) {
+                      pushToast({
+                        title: "Failed to open project",
+                        description: String(err),
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setMediaLoading(false);
+                    }
+                  }}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" /> Open Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <div className="tool-group">
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleOpen}>
+              <FolderOpen className="h-4 w-4" /> Open Media
+            </Button>
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleAddClip}>
+              <Scissors className="h-4 w-4" /> Add Clip
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              onClick={() => {
+                replaceProjectBaseline(newProject("Untitled"), { dirty: false, filePath: null });
                 resetPlayer();
-                pushToast({ title: "Project opened", description: path });
-              } catch (err) {
-                pushToast({
-                  title: "Failed to open project",
-                  description: String(err),
-                  variant: "destructive",
+              }}
+            >
+              <FilePlus2 className="h-4 w-4" /> New
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              onClick={async () => {
+                const path = await openDialog({
+                  multiple: false,
+                  filters: [{ name: "Scribe project", extensions: ["scribe"] }],
                 });
-              }
-            }}
-          >
-            <FolderOpen className="h-4 w-4" /> Project
-          </Button>
-          <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
-            <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
-          </Button>
-        </div>
+                if (typeof path !== "string") return;
+                setMediaLoading(true);
+                try {
+                  const loaded = await loadProject(path);
+                  cacheProjectTranscripts(loaded);
+                  replaceProjectBaseline(loaded, { dirty: false, filePath: path });
+                  resetPlayer();
+                  pushToast({ title: "Project opened", description: path });
+                } catch (err) {
+                  pushToast({
+                    title: "Failed to open project",
+                    description: String(err),
+                    variant: "destructive",
+                  });
+                } finally {
+                  setMediaLoading(false);
+                }
+              }}
+            >
+              <FolderOpen className="h-4 w-4" /> Project
+            </Button>
+            <Button size="sm" variant="ghost" className="tool-button" onClick={handleSave}>
+              <Save className="h-4 w-4" /> Save{dirty ? " *" : ""}
+            </Button>
+          </div>
+        )}
 
         <Toolbox onFindClick={onFindClick} />
 
-        <div className="tool-group">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            onClick={() => setRecordDialogOpen(true)}
-          >
-            <Radio className="h-4 w-4" /> Record
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            title="Music tracks (ducked under voice on export)"
-            onClick={() => setMusicDialogOpen(true)}
-          >
-            <Music className="h-4 w-4" /> Music
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button"
-            title="Project snapshots (named restore points)"
-            onClick={() => setSnapshotsDialogOpen(true)}
-          >
-            <History className="h-4 w-4" /> Snapshots
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button tool-button-primary"
-            title={
-              hasTranscript
-                ? "Clear existing transcript and re-run Whisper from scratch"
-                : "Transcribe audio with Whisper"
-            }
-            onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
-          >
-            <MicVocal className="h-4 w-4" />
-            {hasTranscript ? "Re-Transcribe" : "Transcribe"}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="tool-button tool-button-danger"
-            onClick={handleCloseProject}
-          >
-            <Power className="h-4 w-4" /> Close
-          </Button>
-        </div>
+        {/* ── Right tool group ── */}
+        {compact ? (
+          <div className="tool-group">
+            {/* Always-visible: Transcribe (most important action) */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button tool-button-primary"
+              title={
+                hasTranscript
+                  ? "Clear existing transcript and re-run Whisper from scratch"
+                  : "Transcribe audio with Whisper"
+              }
+              onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
+            >
+              <MicVocal className="h-4 w-4" />
+              {hasTranscript ? "Re-Transcribe" : "Transcribe"}
+            </Button>
+            {/* Overflow: Record, Music, Snapshots, Close */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="tool-button">
+                  More <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                <DropdownMenuItem onClick={() => setRecordDialogOpen(true)}>
+                  <Radio className="h-4 w-4 mr-2" /> Record
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMusicDialogOpen(true)}>
+                  <Music className="h-4 w-4 mr-2" /> Music
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSnapshotsDialogOpen(true)}>
+                  <History className="h-4 w-4 mr-2" /> Snapshots
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={handleCloseProject}
+                >
+                  <Power className="h-4 w-4 mr-2" /> Close Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <div className="tool-group">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              onClick={() => setRecordDialogOpen(true)}
+            >
+              <Radio className="h-4 w-4" /> Record
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              title="Music tracks (ducked under voice on export)"
+              onClick={() => setMusicDialogOpen(true)}
+            >
+              <Music className="h-4 w-4" /> Music
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button"
+              title="Project snapshots (named restore points)"
+              onClick={() => setSnapshotsDialogOpen(true)}
+            >
+              <History className="h-4 w-4" /> Snapshots
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button tool-button-primary"
+              title={
+                hasTranscript
+                  ? "Clear existing transcript and re-run Whisper from scratch"
+                  : "Transcribe audio with Whisper"
+              }
+              onClick={hasTranscript ? handleReTranscribe : handleTranscribe}
+            >
+              <MicVocal className="h-4 w-4" />
+              {hasTranscript ? "Re-Transcribe" : "Transcribe"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tool-button tool-button-danger"
+              onClick={handleCloseProject}
+            >
+              <Power className="h-4 w-4" /> Close
+            </Button>
+          </div>
+        )}
       </div>
 
       <Dialog
@@ -926,34 +1044,20 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             </DialogDescription>
           </DialogHeader>
 
-          {/* ── Engine picker ── */}
-          <div className="flex gap-1 rounded-md border border-border p-1">
-            {(["whisper-cpp", "whisper-kit"] as TranscriptionEngine[]).map((eng) => (
-              <button
-                key={eng}
-                type="button"
-                className={`flex-1 rounded py-1 text-xs font-medium transition-colors ${
-                  transcribeEngine === eng
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent"
-                }`}
-                onClick={() => setTranscribeEngine(eng)}
-              >
-                {eng === "whisper-cpp" ? "whisper.cpp · Core ML" : "WhisperKit · ANE"}
-              </button>
-            ))}
-          </div>
+          {/* ── Engine info ── */}
+          <p className="text-xs text-muted-foreground rounded-md border border-border px-3 py-2">
+            <span className="font-semibold text-foreground">whisper.cpp · Core ML</span>
+            {" "}— runs 100% locally with Apple Silicon acceleration. Tight word-level
+            timestamps for accurate video/text sync.
+          </p>
 
           {/* ── Model list ── */}
           <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
-            {(transcribeEngine === "whisper-cpp" ? MODELS : WK_MODELS).map((m) => {
+            {MODELS.map((m) => {
               const installed = installedModels.find((i) => i.name === m.name)?.installed ?? false;
               const isDownloading = downloadingModel === m.name;
               const isOtherDownloading = downloadingModel !== null && !isDownloading;
-              const isSelected =
-                transcribeEngine === "whisper-cpp"
-                  ? selectedModel === m.name
-                  : selectedWKModel === m.name;
+              const isSelected = selectedModel === m.name;
 
               return (
                 <div
@@ -970,13 +1074,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
                         value={m.name}
                         checked={isSelected}
                         disabled={!installed}
-                        onChange={() => {
-                          if (transcribeEngine === "whisper-cpp") {
-                            setSelectedModel(m.name as WhisperModel);
-                          } else {
-                            setSelectedWKModel(m.name as WhisperKitModel);
-                          }
-                        }}
+                        onChange={() => setSelectedModel(m.name as WhisperModel)}
                       />
                       {m.label}
                     </label>
@@ -1037,37 +1135,35 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               </select>
             </label>
 
-            {/* translate + diarize — only meaningful for whisper.cpp */}
-            {transcribeEngine === "whisper-cpp" && (
-              <div className="flex flex-col gap-2">
-                <label className="flex cursor-pointer items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={transcribeTranslate}
-                    onChange={(e) => setTranscribeTranslate(e.target.checked)}
-                  />
-                  <span>
-                    <span className="font-medium">Translate to English</span>
-                    <span className="ml-1 text-muted-foreground">
-                      — output English regardless of source
-                    </span>
+            {/* translate + diarize */}
+            <div className="flex flex-col gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={transcribeTranslate}
+                  onChange={(e) => setTranscribeTranslate(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Translate to English</span>
+                  <span className="ml-1 text-muted-foreground">
+                    — output English regardless of source
                   </span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={transcribeDiarize}
-                    onChange={(e) => setTranscribeDiarize(e.target.checked)}
-                  />
-                  <span>
-                    <span className="font-medium">Speaker diarisation</span>
-                    <span className="ml-1 text-muted-foreground">
-                      — label who is speaking
-                    </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={transcribeDiarize}
+                  onChange={(e) => setTranscribeDiarize(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Speaker diarisation</span>
+                  <span className="ml-1 text-muted-foreground">
+                    — label who is speaking
                   </span>
-                </label>
-              </div>
-            )}
+                </span>
+              </label>
+            </div>
           </div>
 
           <DialogFooter>
@@ -1082,9 +1178,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               onClick={startTranscribe}
               disabled={
                 downloadingModel !== null ||
-                !(transcribeEngine === "whisper-cpp"
-                  ? installedModels.find((m) => m.name === selectedModel)?.installed
-                  : installedModels.find((m) => m.name === selectedWKModel)?.installed)
+                !installedModels.find((m) => m.name === selectedModel)?.installed
               }
               variant={forceRetranscribeRef.current ? "destructive" : "default"}
             >
@@ -1370,6 +1464,28 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Model download</span>
               <span>{Math.round((modelDownloadProgress ?? 0) * 100)}%</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Generic "operation in progress" dialog (Trim silences, etc.) ── */}
+      <Dialog open={editOperationLabel !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-sm" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scissors className="h-4 w-4 text-primary" />
+              {editOperationLabel ?? "Processing…"}
+            </DialogTitle>
+            <DialogDescription>
+              Applying edits to the project — this will complete shortly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress indeterminate />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Working…</span>
+              <span>Please wait</span>
             </div>
           </div>
         </DialogContent>

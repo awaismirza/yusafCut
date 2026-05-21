@@ -17,6 +17,12 @@ interface UIState {
   modelDownloadProgress: number | null;
   transcribeProgress: number | null;
   mediaLoading: boolean;
+  /**
+   * When non-null, an indeterminate "operation in progress" dialog is shown
+   * with this label, blocking the UI until the operation completes.
+   * Used for heavy synchronous operations like Trim Silences.
+   */
+  editOperationLabel: string | null;
   activeTool: EditorTool;
 
   pushToast: (t: Omit<Toast, "id">) => void;
@@ -26,6 +32,7 @@ interface UIState {
   setModelDownloadProgress: (p: number | null) => void;
   setTranscribeProgress: (p: number | null) => void;
   setMediaLoading: (loading: boolean) => void;
+  setEditOperationLabel: (label: string | null) => void;
   setActiveTool: (tool: EditorTool) => void;
 }
 
@@ -35,6 +42,7 @@ export const useUIStore = create<UIState>((set) => ({
   modelDownloadProgress: null,
   transcribeProgress: null,
   mediaLoading: false,
+  editOperationLabel: null,
   activeTool: "select",
 
   pushToast: (t) =>
@@ -50,5 +58,6 @@ export const useUIStore = create<UIState>((set) => ({
   setModelDownloadProgress: (p) => set({ modelDownloadProgress: p }),
   setTranscribeProgress: (p) => set({ transcribeProgress: p }),
   setMediaLoading: (loading) => set({ mediaLoading: loading }),
+  setEditOperationLabel: (label) => set({ editOperationLabel: label }),
   setActiveTool: (tool) => set({ activeTool: tool }),
 }));

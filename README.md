@@ -8,22 +8,30 @@ Delete words, the corresponding video disappears. Reorder paragraphs, the video
 reorders. Everything runs 100% locally using your Mac's CPU/GPU/Neural Engine
 — no cloud, no telemetry, no API keys required.
 
-Scribe 1.3.0 is MVP ready for local-first transcript editing, timeline preview,
-and MP4 export on Apple Silicon Macs. See [`scribe-spec.md`](scribe-spec.md) for
-the full design document.
+Scribe 3.2.0 is production-ready for local-first transcript editing, timeline
+preview, and MP4 export on Apple Silicon Macs. See [`scribe-spec.md`](scribe-spec.md)
+for the full design document.
 
 ## Status
 
-| Phase | Description | State |
-|-------|-------------|-------|
-| 0 | Project scaffolding | ✅ complete |
-| 1 | Media import + FFprobe | ✅ MVP ready |
-| 2 | Whisper transcription | ✅ MVP ready with local sidecar |
-| 3 | Transcript editor UI | ✅ read-only selectable transcript surface |
-| 4 | Edit operations | ✅ EDL helpers + delete pipeline + guarded undo |
-| 5 | Project save/load | ✅ atomic .scribe bundle round-trip |
-| 6 | Export | ✅ MVP ready |
-| 7 | Polish (icons, notarisation, auto-update) | ⏳ post-1.0 |
+| Feature | State |
+|---------|-------|
+| Media import (FFprobe) | ✅ complete |
+| Whisper.cpp transcription (Core ML + Metal) | ✅ complete |
+| Transcript editor (TipTap + WordNode) | ✅ complete |
+| EDL-based edit operations + 50-step undo | ✅ complete |
+| Project save/load (.scribe bundle) | ✅ complete |
+| Smart-cut FFmpeg export (VideoToolbox) | ✅ complete |
+| Background job queue with cancel | ✅ complete |
+| Multi-clip / Add Clip support | ✅ complete |
+| Multi-track audio with ducking | ✅ complete |
+| Project snapshots (named restore points) | ✅ complete |
+| Responsive toolbar (overflow dropdown) | ✅ complete |
+| Indeterminate progress dialogs (all blocking ops) | ✅ complete |
+| AI chapters + b-roll suggestions (MLX on-device) | ✅ complete |
+| Timeline zoom, in/out markers | ✅ complete |
+| Speaker diarisation | ⏳ experimental (`--diarize` flag) |
+| Auto-update / notarisation | ⏳ post-ship |
 
 "Binary not bundled" means the Rust command code is in place but the actual
 sidecar binaries (`whisper-cli`, `ffmpeg`, `ffprobe`) must be obtained

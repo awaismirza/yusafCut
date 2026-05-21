@@ -1,7 +1,7 @@
 {
   "name": "scribe",
   "private": true,
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Local-first text-based video editor for Apple Silicon",
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-progress": "^1.1.0",
     "@radix-ui/react-slider": "^1.2.1",
     "@radix-ui/react-slot": "^1.1.0",

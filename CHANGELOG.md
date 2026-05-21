@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-05-21
+
+### Added
+- **Responsive toolbar overflow.** The top toolbar now uses a `ResizeObserver`
+  to detect when the window is too narrow (< 860 px) and collapses each button
+  group into a "More ▾" dropdown. Nothing is hidden — every action is always
+  reachable.
+- **Indeterminate progress dialog for blocking edits.** Any heavy synchronous
+  operation (Trim Silences, etc.) now shows a centred modal with a spinning
+  indicator and a label so the app never looks frozen. The pattern is driven by
+  `uiStore.editOperationLabel` — set a string to show the dialog, set `null` to
+  dismiss it. New operations follow the same two-`requestAnimationFrame` deferred
+  pattern so React renders the dialog before the work begins.
+- **Project open loader.** Opening a `.scribe` file now shows the existing
+  media-loading spinner so large projects don't silently stall the UI.
+
+### Changed
+- **Whisper.cpp accuracy improvements.** Added `--max-len 0` (eliminates
+  segment-length-cap timestamp compression drift), `--best-of 5`, and
+  `--beam-size 5` for higher-quality transcripts and better word-timestamp
+  alignment.
+- **Fixed token-offset ambiguity.** `token_offsets_ms` now correctly handles
+  the `seg.from == 0` edge case where absolute and relative token offsets look
+  identical, preventing rare timestamp doubling at the start of recordings. Also
+  adds a safety clamp (`end = end.max(start + 1)`) to guard against
+  zero-duration words from corrupted JSON.
+
+### Removed
+- **WhisperKit / ANE engine removed.** The WhisperKit engine and
+  `whisperkit-cli` sidecar are removed because ANE-quantized models produced
+  inaccurate word timestamps that caused video/text drift. The full
+  implementation is preserved in git at commit `4726d25`; restore it with
+  `git show 4726d25:src-tauri/src/commands/transcribe.rs`.
+
 ## [2.2.0] - 2026-05-21
 
 ### Added
