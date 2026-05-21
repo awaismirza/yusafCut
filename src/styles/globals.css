@@ -87,27 +87,15 @@
 }
 .editor-toolbar-top {
   height: 38px;
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr);
-  align-items: center;
-  padding: 0 14px;
-  border-bottom: 1px solid hsl(var(--border) / 0.75);
-}
-.traffic-lights {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.traffic-lights span {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  box-shadow: 0 0 0 1px hsl(0 0% 0% / 0.25) inset;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid hsl(var(--border) / 0.75);
 }
 .toolbar-title {
   display: flex;
   align-items: baseline;
-  justify-content: center;
   gap: 10px;
   min-width: 0;
   color: hsl(var(--foreground) / 0.9);
