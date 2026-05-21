@@ -206,85 +206,14 @@ export function revealInFinder(path: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// AI / LLM (on-device MLX sidecar)
-// ---------------------------------------------------------------------------
-
-/** A single chapter marker returned by the on-device LLM. */
-export interface ChapterMarker {
-  title: string;
-  /** Start time in seconds from the beginning of the recording. */
-  startSeconds: number;
-}
-
-export interface DetectChaptersOptions {
-  /** Used only to label the background Job entry in the flyout. */
-  mediaId: string;
-  /** Plain text transcript, optionally with `[SS.s]` word timestamps. */
-  transcript: string;
-  /** How many chapters to request (default 10). */
-  nChapters?: number;
-  /** Override the MLX model slug (default Llama-3.2-3B-Instruct-4bit). */
-  model?: string;
-}
-
-/**
- * Run on-device chapter detection via the MLX-LLM sidecar.
- *
- * The call is tracked as a background Job so progress shows up in the Jobs
- * flyout. Resolves with an ordered list of chapter markers.
- */
-export function detectChapters(
-  opts: DetectChaptersOptions,
-): Promise<ChapterMarker[]> {
-  return invoke<ChapterMarker[]>("detect_chapters", { opts });
-}
-
-/** A single b-roll suggestion returned by the on-device LLM. */
-export interface BrollSuggestion {
-  /** Stock footage / Unsplash search query, 4–8 words. */
-  query: string;
-  /** Output-timeline start of the span this covers, in seconds. */
-  startSeconds: number;
-  /** Output-timeline end of the span this covers, in seconds. */
-  endSeconds: number;
-  /** One sentence explaining why this shot suits the content. */
-  rationale: string;
-}
-
-export interface SuggestBrollOptions {
-  /** Used to label the background Job entry. */
-  mediaId: string;
-  /** Transcript text for the span (with optional `[SS.s]` timestamps). */
-  transcript: string;
-  /** Output-timeline start of the span, in seconds. */
-  startSeconds: number;
-  /** Output-timeline end of the span, in seconds. */
-  endSeconds: number;
-  /** How many suggestions to request (default 3). */
-  nSuggestions?: number;
-  /** Override the MLX model slug. */
-  model?: string;
-}
-
-/**
- * Ask the on-device LLM for b-roll search queries for a span of the timeline.
- * Tracked as a background Job. Resolves with an ordered list of suggestions.
- */
-export function suggestBroll(opts: SuggestBrollOptions): Promise<BrollSuggestion[]> {
-  return invoke<BrollSuggestion[]>("suggest_broll", { opts });
-}
-
-// ---------------------------------------------------------------------------
 // Jobs (background queue)
 // ---------------------------------------------------------------------------
 
-export type JobKind =
-  | "export"
-  | "transcribe"
-  | "download-model"
-  | "snapshot"
-  | "detect-chapters"
-  | "suggest-broll";
+// AI / LLM features (detect_chapters, suggest_broll) were removed in v3.4.0
+// to eliminate the Python/MLX sidecar dependency. Restore from commit
+// 074d1d3 if needed.
+
+export type JobKind = "export" | "transcribe" | "download-model" | "snapshot";
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export interface JobSnapshot {

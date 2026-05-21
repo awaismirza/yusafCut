@@ -28,7 +28,7 @@ for the full design document.
 | Project snapshots (named restore points) | ✅ complete |
 | Responsive toolbar (overflow dropdown) | ✅ complete |
 | Indeterminate progress dialogs (all blocking ops) | ✅ complete |
-| AI chapters + b-roll suggestions (MLX on-device) | ✅ complete |
+| AI chapters + b-roll suggestions (MLX on-device) | ❌ removed in v3.4.0 — see commit 074d1d3 |
 | Timeline zoom, in/out markers | ✅ complete |
 | Speaker diarisation | ⏳ experimental (`--diarize` flag) |
 | Auto-update / notarisation | ⏳ post-ship |
@@ -74,7 +74,7 @@ See [`docs/architecture.md`](docs/architecture.md).
 - **WaveSurfer.js** — waveform display
 - **whisper.cpp** (Core ML + Metal) — transcription
 - **FFmpeg** (VideoToolbox) — video processing
-- **MLX** (Python sidecar, opt-in) — local LLM features (Phase 6+)
+- ~~**MLX** (Python sidecar)~~ — removed in v3.4.0; restore from commit 074d1d3
 
 ## Scripts
 

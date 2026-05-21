@@ -1,6 +1,6 @@
 [package]
 name = "scribe"
-version = "3.3.0"
+version = "3.4.0"
 description = "Local-first text-based video editor"
 authors = ["Scribe contributors"]
 license = "AGPL-3.0-or-later"
@@ -37,10 +37,6 @@ reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"], defau
 futures-util = "0.3"
 flate2 = "1.0"
 
-[features]
-default = []
-# Enables the (optional) MLX sidecar feature flag at runtime
-mlx-sidecar = []
 
 [profile.release]
 opt-level = 3
