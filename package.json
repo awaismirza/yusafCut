@@ -1,13 +1,15 @@
 {
   "name": "scribe",
   "private": true,
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "Local-first text-based video editor for Apple Silicon",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "setup:all": "bash scripts/setup.sh",
     "build:production": "bash scripts/build-production.sh",
+    "build:mas": "bash scripts/build-mas.sh",
+    "xcarchive": "bash scripts/create-xcarchive.sh",
     "dev:full": "bash scripts/dev.sh",
     "dev:sidecar": "bash scripts/sidecar-dev.sh",
     "dev": "vite",

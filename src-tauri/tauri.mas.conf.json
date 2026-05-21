@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "macOSPrivateApi": false
+  },
+  "bundle": {
+    "targets": ["app"],
+    "macOS": {
+      "entitlements": "./Entitlements.plist",
+      "provisioningProfile": "./Scribe_MAS.provisionprofile"
+    }
+  }
+}

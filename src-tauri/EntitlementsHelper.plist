@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- All five bundled helper binaries (whisper-cli, whisperkit-cli, ffmpeg,
+       ffprobe, mlx-sidecar) inherit the parent app's sandbox rather than
+       running in their own separate sandbox. This is the standard pattern
+       for helper tools in sandboxed macOS apps. -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+  <key>com.apple.security.inherit</key>
+  <true/>
+</dict>
+</plist>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Required for Mac App Store submission -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+
+  <!-- Files the user explicitly opens/saves via the system file picker -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+
+  <!-- Downloads folder — common drop point for video files -->
+  <key>com.apple.security.files.downloads.read-write</key>
+  <true/>
+
+  <!-- Movies / Videos folder -->
+  <key>com.apple.security.assets.movies.read-write</key>
+  <true/>
+
+  <!-- Security-scoped bookmarks — lets the app re-open previously picked
+       files across sessions without prompting the user again -->
+  <key>com.apple.security.files.bookmarks.document-scope</key>
+  <true/>
+  <key>com.apple.security.files.bookmarks.app-scope</key>
+  <true/>
+
+  <!-- Microphone — voiceover recording and camera audio capture -->
+  <key>com.apple.security.device.microphone</key>
+  <true/>
+
+  <!-- Camera — clip recording -->
+  <key>com.apple.security.device.camera</key>
+  <true/>
+
+  <!-- Network client — downloading WhisperKit models and HuggingFace LLM weights -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>
