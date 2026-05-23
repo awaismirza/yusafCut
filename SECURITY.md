@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Scribe is pre-1.0. Only the latest tagged release receives security fixes.
+YusafCut is pre-1.0. Only the latest tagged release receives security fixes.
 
 ## Reporting a vulnerability
 
@@ -19,7 +19,7 @@ publish mitigation guidance within 14 days for high-severity issues.
 
 ## Threat model (v0.x)
 
-Scribe is a **local-first** desktop application:
+YusafCut is a **local-first** desktop application:
 
 - All media stays on the user's machine.
 - No telemetry, no analytics, no crash reporting to remote servers in v1.

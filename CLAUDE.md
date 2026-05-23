@@ -34,7 +34,7 @@ Every time you implement a feature or fix a bug you **must** also update in the 
 - `CHANGELOG.md` — add an entry under `[Unreleased]` or the new version section
 - `docs/architecture.md` — if the data flow, component layout, or Rust structure changed
 - `README.md` — if the feature table, status, or tech stack changed
-- `scribe-spec.md` — if spec sections describing the changed behaviour are outdated
+- `yusafcut-spec.md` — if spec sections describing the changed behaviour are outdated
 
 No code commit should land without the corresponding doc update.
 
@@ -77,7 +77,7 @@ Run a single Vitest test: `npx vitest run tests/edl.test.ts`
 
 ## Architecture
 
-Scribe is a **local-first, Apple Silicon-only** text-based video editor built with Tauri 2 (React frontend + Rust backend). Editing the transcript edits the video. All processing is 100% local — no cloud, no telemetry.
+YusafCut is a **local-first, Apple Silicon-only** text-based video editor built with Tauri 2 (React frontend + Rust backend). Editing the transcript edits the video. All processing is 100% local — no cloud, no telemetry.
 
 ### Core invariant: the Edit Decision List (EDL)
 
@@ -130,7 +130,7 @@ Commands are registered in `commands/mod.rs` and grouped by domain: `media`, `tr
 
 ### Transcription engine
 
-Scribe uses **whisper.cpp** exclusively for transcription via the `whisper-cli` sidecar binary with Core ML + Metal acceleration.
+YusafCut uses **whisper.cpp** exclusively for transcription via the `whisper-cli` sidecar binary with Core ML + Metal acceleration.
 
 Key flags for timestamp accuracy:
 - `--split-on-word` — per-token word boundaries
@@ -174,5 +174,5 @@ Fetch scripts: `src-tauri/binaries/fetch.sh` (downloads FFmpeg/FFprobe; whisper-
 ## Distribution
 
 - **DMG / direct download**: `npm run tauri:build:dmg`
-- **Mac App Store**: `npm run build:mas` → `npm run xcarchive` (requires provisioning profile at `src-tauri/Scribe_MAS.provisionprofile` — never committed)
+- **Mac App Store**: `npm run build:mas` → `npm run xcarchive` (requires provisioning profile at `src-tauri/YusafCut_MAS.provisionprofile` — never committed)
 - **GitHub Actions release**: `.github/workflows/release.yml` triggers on release tags

@@ -209,7 +209,7 @@ mod tests {
 
     #[tokio::test]
     async fn round_trip_snapshot() {
-        let dir = std::env::temp_dir().join(format!("scribe-snap-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("yusafcut-snap-{}", Uuid::new_v4()));
         let bundle = dir.join("Test.scribe");
         fs::create_dir_all(&bundle).await.unwrap();
 
@@ -231,7 +231,7 @@ mod tests {
 
     #[tokio::test]
     async fn empty_label_falls_back_to_timestamp() {
-        let dir = std::env::temp_dir().join(format!("scribe-snap-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("yusafcut-snap-{}", Uuid::new_v4()));
         let bundle = dir.join("Test.scribe");
         fs::create_dir_all(&bundle).await.unwrap();
         let idx = create(&bundle, &sample(), "   ").await.unwrap();

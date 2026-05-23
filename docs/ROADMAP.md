@@ -1,9 +1,9 @@
-# Scribe — Commercial Roadmap
+# YusafCut — Commercial Roadmap
 
 This document is the running spec for what needs to land between today's
 v2.1 pro pass and a shippable commercial product. Each item is sized
 honestly — t-shirt size (S/M/L/XL) for effort, and a one-line rationale
-explaining why the feature moves Scribe out of "MVP" and into "a thing
+explaining why the feature moves YusafCut out of "MVP" and into "a thing
 people pay for."
 
 Anything marked **Shipped in v2.1** below already lives on `main`. Everything
@@ -14,7 +14,7 @@ else is opinion; pick what to schedule.
 | Feature | Why it matters |
 | --- | --- |
 | Frame-accurate sync (`requestVideoFrameCallback`) | Removes the ~16 ms drift the rAF loop had on 24/30 fps content. The word highlight now actually lands on the spoken word. |
-| Horizontal-scroll virtual timeline + minimap + Cmd-wheel zoom | Editing a 90-min podcast at 1× zoom is useless. 32× zoom + smooth panning makes Scribe usable for long-form. |
+| Horizontal-scroll virtual timeline + minimap + Cmd-wheel zoom | Editing a 90-min podcast at 1× zoom is useless. 32× zoom + smooth panning makes YusafCut usable for long-form. |
 | SRT / VTT caption export | Most paying creators *already* re-edit captions in Final Cut Pro / Premiere. Saves them that round-trip. |
 | One-click silence trim | The "remove ums" demo from Descript that goes viral. Pure EDL — instant, undoable. |
 | Chapter markers + ffmpeg `[CHAPTER]` metadata | YouTube auto-detects them on upload. Spotify, Apple Podcasts read the same blocks. |
@@ -138,7 +138,7 @@ already an immutable-style data structure. Stripe-priced subscription.
 ### Browser viewer (read-only)
 Render the EDL + a public link to the underlying media as a streaming
 HLS preview. Lets the editor share a "v2" with a client before exporting.
-Bumps Scribe from "tool" to "collaboration product".
+Bumps YusafCut from "tool" to "collaboration product".
 
 ### Plug-in API
 Expose a small typescript hook surface (`useEDL`, `registerSidebarTool`)
@@ -148,7 +148,7 @@ linters, AI features, etc. Becomes a marketplace later.
 ### Color / vision controls
 LUT loading, basic three-way colour, vignette / film-grain. Apple's
 `Core Image` filters can be wired through a metal shader on the preview
-side. This is where Scribe stops being "for talking-head content" and
+side. This is where YusafCut stops being "for talking-head content" and
 starts being "for any video".
 
 ---

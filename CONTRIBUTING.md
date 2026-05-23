@@ -1,6 +1,6 @@
-# Contributing to Scribe
+# Contributing to YusafCut
 
-Scribe is built around a single, deliberate architectural decision: **the EDL
+YusafCut is built around a single, deliberate architectural decision: **the EDL
 (Edit Decision List) is the source of truth**. Every contribution should
 preserve the invariants documented in
 [`src/lib/edl.ts`](src/lib/edl.ts) and

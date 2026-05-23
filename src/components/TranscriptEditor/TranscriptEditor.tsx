@@ -176,7 +176,7 @@ export function TranscriptEditor({
       const mapped = wordIdToOutputTime(project, wordId);
       if (!mapped) return;
       window.dispatchEvent(
-        new CustomEvent("scribe:seek-output", { detail: { time: mapped.outputTime, play: true } }),
+        new CustomEvent("yusafcut:seek-output", { detail: { time: mapped.outputTime, play: true } }),
       );
     },
     [project],
@@ -346,7 +346,7 @@ export function TranscriptEditor({
       const mapped = wordIdToOutputTime(project, wordId);
       if (!mapped) return;
       window.dispatchEvent(
-        new CustomEvent("scribe:seek-output", { detail: { time: mapped.outputTime, play: true } }),
+        new CustomEvent("yusafcut:seek-output", { detail: { time: mapped.outputTime, play: true } }),
       );
     },
     [project],

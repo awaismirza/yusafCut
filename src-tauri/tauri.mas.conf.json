@@ -7,7 +7,7 @@
     "targets": ["app"],
     "macOS": {
       "entitlements": "./Entitlements.plist",
-      "provisioningProfile": "./Scribe_MAS.provisionprofile"
+      "provisioningProfile": "./YusafCut_MAS.provisionprofile"
     }
   }
 }

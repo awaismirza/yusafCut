@@ -1,4 +1,4 @@
-//! Scribe backend — Tauri-side glue and command handlers.
+//! YusafCut backend — Tauri-side glue and command handlers.
 //!
 //! Everything that talks to whisper.cpp, ffmpeg, or the filesystem lives in
 //! this crate. The frontend communicates via Tauri commands in `commands::*`.
@@ -75,5 +75,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Scribe");
+        .expect("error while running YusafCut");
 }

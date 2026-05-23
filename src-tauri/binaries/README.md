@@ -71,8 +71,8 @@ git clone https://github.com/ggerganov/whisper.cpp
 cd whisper.cpp
 # Core ML + Metal
 WHISPER_COREML=1 WHISPER_METAL=1 make -j
-cp main ../scribe/src-tauri/binaries/whisper-cli-aarch64-apple-darwin
-chmod +x ../scribe/src-tauri/binaries/whisper-cli-aarch64-apple-darwin
+cp main ../yusafcut/src-tauri/binaries/whisper-cli-aarch64-apple-darwin
+chmod +x ../yusafcut/src-tauri/binaries/whisper-cli-aarch64-apple-darwin
 ```
 
 Note that the binary is called `main` in the upstream Makefile; we rename it.

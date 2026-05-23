@@ -35,7 +35,7 @@ export function StatusBar() {
   const duration = totalDuration(project);
 
   return (
-    <div className="scribe-statusbar">
+    <div className="yusafcut-statusbar">
       <JobsFlyout />
       <span className="sep">·</span>
       <span className="chip">

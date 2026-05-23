@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Scribe — one-shot dev setup script
+# YusafCut — one-shot dev setup script
 #
 # Run once after cloning, or any time you want to reset your environment:
 #
@@ -39,13 +39,13 @@ SIDECAR="$REPO/sidecars/mlx-llm"
 ARCH_SUFFIX="aarch64-apple-darwin"
 
 echo -e "\n${BOLD}╔══════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║       Scribe — setup:all             ║${RESET}"
+echo -e "${BOLD}║       YusafCut — setup:all             ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════╝${RESET}"
 
 # ── 1. Platform guard ─────────────────────────────────────────────────────────
 header "1 / 6  Platform check"
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  fail "Scribe targets macOS only. Exiting."
+  fail "YusafCut targets macOS only. Exiting."
   exit 1
 fi
 if [[ "$(uname -m)" != "arm64" ]]; then

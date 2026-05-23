@@ -1,4 +1,4 @@
-# Scribe — Local-First Text-Based Video Editor for Apple Silicon
+# YusafCut — Local-First Text-Based Video Editor for Apple Silicon
 
 > **Hand this entire document to Claude Code as the project brief.** It is structured so you can paste it whole, or paste it phase-by-phase as you build.
 
@@ -8,7 +8,7 @@
 
 An open-source desktop video editor for macOS (Apple Silicon) where **the transcript IS the timeline**. Delete words in the transcript, the corresponding video disappears. Reorder paragraphs, the video reorders. Everything runs **100% locally** using the Mac's CPU/GPU/Neural Engine — no cloud, no telemetry, no API keys required.
 
-**Product name (working):** Scribe
+**Product name (working):** YusafCut
 **License:** AGPL-3.0 (or MIT — decide before first public release)
 **Target user:** Podcasters, YouTubers, course creators, journalists, anyone who edits talking-head or interview video.
 
@@ -49,7 +49,7 @@ An open-source desktop video editor for macOS (Apple Silicon) where **the transc
 ### Project layout
 
 ```
-scribe/
+yusafcut/
 ├── src-tauri/              # Rust backend
 │   ├── src/
 │   │   ├── main.rs
@@ -205,12 +205,12 @@ export function computeTimeline(project: Project): TimelineEntry[] {
 
 ### Phase 0 — Project scaffolding (Day 1)
 
-**Goal:** Empty Tauri app launches, shows "Hello Scribe", builds to a `.dmg`.
+**Goal:** Empty Tauri app launches, shows "Hello YusafCut", builds to a `.dmg`.
 
 Tasks for Claude Code:
-1. `npm create tauri-app@latest scribe` — React + TypeScript template.
+1. `npm create tauri-app@latest yusafcut` — React + TypeScript template.
 2. Add Tailwind, shadcn/ui, Zustand, TipTap, WaveSurfer.js.
-3. Configure `tauri.conf.json` for macOS-only build, set bundle identifier `dev.scribe.app`.
+3. Configure `tauri.conf.json` for macOS-only build, set bundle identifier `dev.yusafcut.app`.
 4. Set up `pnpm` (preferred) or `npm` scripts: `dev`, `build`, `lint`, `test`.
 5. Add Vitest + React Testing Library.
 6. Add Rust test scaffolding (`cargo test` working).
@@ -256,7 +256,7 @@ Tasks:
    - Show model picker: `tiny`, `base`, `small`, `medium`, `large-v3-turbo` (default).
    - Download from Hugging Face: `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model}.bin`.
    - Also download the Core ML companion: `ggml-{model}-encoder.mlmodelc.zip`, unzip.
-   - Store in `~/Library/Application Support/dev.scribe.app/models/`.
+   - Store in `~/Library/Application Support/dev.yusafcut.app/models/`.
    - Show download progress, support resume, verify SHA-256.
 
 3. **Audio extraction.** Before transcribing, extract 16kHz mono WAV from the video:
@@ -458,7 +458,7 @@ As described in Phase 6 — copy most of the stream, only re-encode the few seco
 
 1. **License.** AGPL-3.0 (copyleft, protects against closed-source forks) or MIT (maximum adoption)? Recommendation: **AGPL-3.0** for the app, MIT for any reusable libraries we split out.
 2. **Telemetry.** None in v1. Decide later whether to add opt-in crash reports.
-3. **Name.** "Scribe" works but check trademark conflicts in the macOS App Store and video software space before launch.
+3. **Name.** "YusafCut" works but check trademark conflicts in the macOS App Store and video software space before launch.
 4. **Distribution.** Direct download from GitHub Releases is fine for v1. Mac App Store distribution is more work (sandboxing constraints around sidecars).
 5. **Funding model.** Pure FOSS? GitHub Sponsors? "Pro" features (cloud sync, team features) as a separate paid tier later? Decide before community traction makes the choice for you.
 
@@ -470,8 +470,8 @@ When you start, run these in order:
 
 ```bash
 # 1. Scaffold
-pnpm create tauri-app@latest scribe --template react-ts
-cd scribe
+pnpm create tauri-app@latest yusafcut --template react-ts
+cd yusafcut
 
 # 2. Core dependencies
 pnpm add zustand zundo @tiptap/react @tiptap/pm @tiptap/starter-kit \

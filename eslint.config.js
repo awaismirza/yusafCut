@@ -33,7 +33,7 @@ export default [
         HTMLVideoElement: "readonly",
         HTMLDivElement: "readonly",
         HTMLInputElement: "readonly",
-        // Browser APIs used in Scribe
+        // Browser APIs used in YusafCut
         Event: "readonly",
         CustomEvent: "readonly",
         CSS: "readonly",

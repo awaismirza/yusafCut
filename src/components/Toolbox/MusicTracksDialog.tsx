@@ -94,7 +94,7 @@ export function MusicTracksDialog({ open, onOpenChange }: Props) {
         <div className="flex flex-col gap-2">
           {tracks.length === 0 && (
             <div className="rounded-md border border-dashed border-border bg-secondary/40 px-3 py-6 text-center text-xs text-muted-foreground">
-              No music tracks yet. Add a music bed and Scribe will mix it under the spoken edit
+              No music tracks yet. Add a music bed and YusafCut will mix it under the spoken edit
               when you export.
             </div>
           )}

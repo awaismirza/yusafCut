@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Scribe",
+  "productName": "YusafCut",
   "version": "3.7.0",
-  "identifier": "dev.scribe.app",
+  "identifier": "dev.yusafcut.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "Scribe",
+        "title": "YusafCut",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
@@ -52,7 +52,7 @@
     ],
     "category": "Video",
     "shortDescription": "Local-first text-based video editor",
-    "longDescription": "Scribe lets you edit talking-head video by editing its transcript. Everything runs 100% on your Mac.",
+    "longDescription": "YusafCut lets you edit talking-head video by editing its transcript. Everything runs 100% on your Mac.",
     "macOS": {
       "minimumSystemVersion": "13.0",
       "exceptionDomain": "",

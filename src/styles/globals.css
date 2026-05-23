@@ -22,7 +22,7 @@
     --radius: 0.5rem;
   }
 
-  /* ── Scribe Editor design tokens — warm-neutral dark + teal accent ────
+  /* ── YusafCut Editor design tokens — warm-neutral dark + teal accent ────
      Ported from the claude.ai/design handoff. HSL approximations of the
      original oklch values, chosen so the existing shadcn components keep
      working but the look matches the design.                             */
@@ -44,7 +44,7 @@
     --input: 30 4% 24%;
     --ring: 188 60% 55%;
 
-    /* Scribe semantic tokens (not part of shadcn's set) */
+    /* YusafCut semantic tokens (not part of shadcn's set) */
     --filler: 42 70% 65%; /* amber — filler word highlight */
     --filler-strong: 42 70% 58%;
     --delete: 18 70% 55%; /* red — deleted regions */
@@ -505,7 +505,7 @@
 /* ════════════════════════════════════════════════════════════════════════
    STATUS BAR — bottom of the window (model, counts, timecode)
    ════════════════════════════════════════════════════════════════════════ */
-.scribe-statusbar {
+.yusafcut-statusbar {
   height: 26px;
   display: flex;
   align-items: center;
@@ -523,29 +523,29 @@
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
-.scribe-statusbar > * {
+.yusafcut-statusbar > * {
   flex-shrink: 0;
 }
-.scribe-statusbar .sep {
+.yusafcut-statusbar .sep {
   opacity: 0.5;
 }
-.scribe-statusbar .spacer {
+.yusafcut-statusbar .spacer {
   flex: 1;
 }
-.scribe-statusbar .chip {
+.yusafcut-statusbar .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: hsl(var(--foreground));
 }
-.scribe-statusbar .chip .pulse {
+.yusafcut-statusbar .chip .pulse {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: hsl(var(--pulse));
   box-shadow: 0 0 5px hsl(var(--pulse) / 0.7);
 }
-.scribe-statusbar button.chip {
+.yusafcut-statusbar button.chip {
   border: 0;
   background: transparent;
   padding: 2px 8px;
@@ -555,11 +555,11 @@
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
-.scribe-statusbar button.chip:hover {
+.yusafcut-statusbar button.chip:hover {
   background: hsl(var(--border) / 0.4);
   color: hsl(var(--foreground));
 }
-.scribe-statusbar button.chip.is-active {
+.yusafcut-statusbar button.chip.is-active {
   color: hsl(var(--foreground));
   background: hsl(var(--primary) / 0.15);
 }

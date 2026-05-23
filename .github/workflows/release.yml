@@ -202,7 +202,7 @@ jobs:
         run: |
           DMG=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" | head -1)
           gh release create "$GITHUB_REF_NAME" "$DMG" \
-            --title "Scribe $GITHUB_REF_NAME" \
+            --title "YusafCut $GITHUB_REF_NAME" \
             --generate-notes \
             --verify-tag
 

@@ -211,7 +211,7 @@ pub fn parse_keyframe_csv(s: &str) -> Vec<f64> {
 /// if a worker dies.
 pub fn temp_path(suffix: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
-    p.push(format!("scribe-smartcut-{}-{}", uuid::Uuid::new_v4(), suffix));
+    p.push(format!("yusafcut-smartcut-{}-{}", uuid::Uuid::new_v4(), suffix));
     p
 }
 

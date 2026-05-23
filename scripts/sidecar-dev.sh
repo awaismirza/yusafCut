@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Scribe — standalone MLX sidecar dev runner
+# YusafCut — standalone MLX sidecar dev runner
 #
 #   npm run dev:sidecar     (calls this script)
 #
@@ -36,7 +36,7 @@ VENV_PY="$SIDECAR/.venv/bin/python"
 # ── banner ────────────────────────────────────────────────────────────────────
 echo "" >&2
 echo -e "${BOLD}${MAGENTA}┌──────────────────────────────────────────────┐${RESET}" >&2
-echo -e "${BOLD}${MAGENTA}│   Scribe  ·  MLX sidecar  ·  dev mode       │${RESET}" >&2
+echo -e "${BOLD}${MAGENTA}│   YusafCut  ·  MLX sidecar  ·  dev mode       │${RESET}" >&2
 echo -e "${BOLD}${MAGENTA}└──────────────────────────────────────────────┘${RESET}" >&2
 echo "" >&2
 

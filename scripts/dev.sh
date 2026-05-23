@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Scribe — full dev launcher
+# YusafCut — full dev launcher
 #
 #   npm run dev:full        (calls this script)
 #
@@ -44,7 +44,7 @@ trap cleanup EXIT INT TERM
 # ── banner ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${CYAN}┌──────────────────────────────────────────────┐${RESET}"
-echo -e "${BOLD}${CYAN}│   Scribe  ·  dev:full                        │${RESET}"
+echo -e "${BOLD}${CYAN}│   YusafCut  ·  dev:full                        │${RESET}"
 echo -e "${BOLD}${CYAN}└──────────────────────────────────────────────┘${RESET}"
 echo ""
 
@@ -95,7 +95,7 @@ fi
 header "Environment"
 
 # Surface Rust + sidecar logs clearly, suppress noisy crate spam
-export RUST_LOG="${RUST_LOG:-scribe=debug,tauri=info,wry=warn,warn}"
+export RUST_LOG="${RUST_LOG:-yusafcut=debug,tauri=info,wry=warn,warn}"
 # Surface Python sidecar stderr (Tauri pipes it as CommandEvent::Stderr)
 export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
 # Ensure mlx-lm can find the Hugging Face cache

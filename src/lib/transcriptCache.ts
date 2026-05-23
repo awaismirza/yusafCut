@@ -1,6 +1,6 @@
 import type { Project, SourceMedia, Word } from "@/lib/edl";
 
-const TRANSCRIPT_CACHE_PREFIX = "scribe.transcript.v1.";
+const TRANSCRIPT_CACHE_PREFIX = "yusafcut.transcript.v1.";
 
 function transcriptCacheKey(media: SourceMedia): string {
   return `${TRANSCRIPT_CACHE_PREFIX}${media.sha256}`;

@@ -65,7 +65,7 @@ mod tests {
     fn round_trip_via_tempdir() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let dir = std::env::temp_dir().join(format!("scribe-test-{}", uuid::Uuid::new_v4()));
+            let dir = std::env::temp_dir().join(format!("yusafcut-test-{}", uuid::Uuid::new_v4()));
             let bundle = dir.join("Test.scribe");
             let p = sample_project();
             save(&p, &bundle).await.unwrap();

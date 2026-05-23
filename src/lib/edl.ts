@@ -1,6 +1,6 @@
 // EDL (Edit Decision List) — the central immutable data model.
 //
-// Everything in Scribe is a thin layer over this structure. The transcript view,
+// Everything in YusafCut is a thin layer over this structure. The transcript view,
 // the player, and the export pipeline all derive their state from a Project.
 //
 // Invariants (must hold after every operation):

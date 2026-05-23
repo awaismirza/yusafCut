@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dev.sh — clean slate dev launch for Scribe
+# dev.sh — clean slate dev launch for YusafCut
 #
 # Usage:
 #   ./dev.sh          # normal dev launch (incremental)
@@ -22,7 +22,7 @@ for arg in "$@"; do
   esac
 done
 
-echo "▶ Scribe dev launcher"
+echo "▶ YusafCut dev launcher"
 
 # -- Check prerequisites --
 if ! command -v cargo &>/dev/null; then
@@ -57,7 +57,7 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-echo "→ Starting Scribe in dev mode..."
+echo "→ Starting YusafCut in dev mode..."
 echo "  (First Rust compile takes 5-15 min. Subsequent launches are fast.)"
 echo ""
 npm run tauri:dev

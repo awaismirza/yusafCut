@@ -49,14 +49,14 @@ export function useKeyboardShortcuts() {
           }
           if (best) {
             window.dispatchEvent(
-              new CustomEvent("scribe:seek-output", {
+              new CustomEvent("yusafcut:seek-output", {
                 detail: { time: best.outputTime, play: true },
               }),
             );
           }
         }
         if (willPause) s.setRate(1);
-        window.dispatchEvent(new CustomEvent("scribe:toggle-play"));
+        window.dispatchEvent(new CustomEvent("yusafcut:toggle-play"));
         return;
       }
 
@@ -66,7 +66,7 @@ export function useKeyboardShortcuts() {
         const nextRate = e.shiftKey ? 0.5 : nextShuttleRate(s.playing ? s.rate : 0);
         s.setRate(nextRate);
         window.dispatchEvent(
-          new CustomEvent("scribe:seek-output", {
+          new CustomEvent("yusafcut:seek-output", {
             detail: { time: Math.max(0, s.currentTime - 3 * nextRate), play: true },
           }),
         );
@@ -75,7 +75,7 @@ export function useKeyboardShortcuts() {
       if (e.key.toLowerCase() === "k" && !inTextField) {
         e.preventDefault();
         usePlayerStore.getState().setRate(1);
-        window.dispatchEvent(new CustomEvent("scribe:pause"));
+        window.dispatchEvent(new CustomEvent("yusafcut:pause"));
         return;
       }
       if (e.key.toLowerCase() === "l" && !inTextField) {
@@ -83,7 +83,7 @@ export function useKeyboardShortcuts() {
         const s = usePlayerStore.getState();
         const nextRate = nextShuttleRate(s.playing ? s.rate : 0);
         s.setRate(nextRate);
-        window.dispatchEvent(new CustomEvent("scribe:play"));
+        window.dispatchEvent(new CustomEvent("yusafcut:play"));
         return;
       }
 
@@ -153,7 +153,7 @@ export function useKeyboardShortcuts() {
           player.setSelectedWordIds([]);
           player.setCurrentTime(seekTo);
           window.dispatchEvent(
-            new CustomEvent("scribe:seek-output", { detail: { time: seekTo, play: false } }),
+            new CustomEvent("yusafcut:seek-output", { detail: { time: seekTo, play: false } }),
           );
           return;
         }
@@ -190,12 +190,12 @@ export function useKeyboardShortcuts() {
       }
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("scribe:save"));
+        window.dispatchEvent(new CustomEvent("yusafcut:save"));
         return;
       }
       if (mod && e.key.toLowerCase() === "e") {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("scribe:export"));
+        window.dispatchEvent(new CustomEvent("yusafcut:export"));
         return;
       }
     }

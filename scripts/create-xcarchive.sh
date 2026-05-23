@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Scribe — create Xcode archive for App Store Connect upload
+# YusafCut — create Xcode archive for App Store Connect upload
 #
-# Wraps the MAS-signed .app into a Scribe.xcarchive bundle that Xcode
+# Wraps the MAS-signed .app into a YusafCut.xcarchive bundle that Xcode
 # Organizer understands. Opening the archive launches Xcode Organizer,
 # where you click "Distribute App → App Store Connect → Upload".
 #
@@ -23,11 +23,11 @@ die()  { echo -e "  ${RED}✗${RESET}  $*"; exit 1; }
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP=$(find "$REPO/src-tauri/target/release/bundle/macos" -name "*.app" 2>/dev/null | head -1)
 VERSION=$(node -p "require('$REPO/package.json').version" 2>/dev/null || echo "unknown")
-ARCHIVE="$REPO/Scribe.xcarchive"
+ARCHIVE="$REPO/YusafCut.xcarchive"
 
 [[ -n "$APP" ]] || die "No .app found. Run 'npm run build:mas' first."
 
-echo -e "\n${BOLD}Creating Scribe.xcarchive${RESET}"
+echo -e "\n${BOLD}Creating YusafCut.xcarchive${RESET}"
 info "Source: $APP"
 info "Target: $ARCHIVE"
 
@@ -45,9 +45,9 @@ cat > "$ARCHIVE/Info.plist" << PLIST
   <key>ApplicationProperties</key>
   <dict>
     <key>ApplicationPath</key>
-    <string>Products/Applications/Scribe.app</string>
+    <string>Products/Applications/YusafCut.app</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.scribe.app</string>
+    <string>dev.yusafcut.app</string>
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
     <key>SigningIdentity</key>
@@ -58,9 +58,9 @@ cat > "$ARCHIVE/Info.plist" << PLIST
   <key>CreationDate</key>
   <string>$(date -u +"%Y-%m-%dT%H:%M:%SZ")</string>
   <key>Name</key>
-  <string>Scribe</string>
+  <string>YusafCut</string>
   <key>SchemeName</key>
-  <string>Scribe</string>
+  <string>YusafCut</string>
 </dict>
 </plist>
 PLIST

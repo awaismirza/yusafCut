@@ -3,7 +3,7 @@
  *
  * Key behaviours:
  *  - When there are no transcribed words yet the video plays freely (no EDL constraints).
- *  - Seeking from transcript/waveform (scribe:seek-source) calls el.play() directly to
+ *  - Seeking from transcript/waveform (yusafcut:seek-source) calls el.play() directly to
  *    avoid the React-state → effect cycle race condition.
  *  - Scrubber shows output-time progress; skip ±5 s; playback rate cycle; mute toggle.
  */
@@ -334,8 +334,8 @@ export function VideoPreview() {
         playVideo();
       }
     };
-    window.addEventListener("scribe:seek-source", handler);
-    return () => window.removeEventListener("scribe:seek-source", handler);
+    window.addEventListener("yusafcut:seek-source", handler);
+    return () => window.removeEventListener("yusafcut:seek-source", handler);
   }, [activeMediaId, playVideo, project, seekToOutputTime, setCurrentTime]);
 
   // ── Time update: skip deleted ranges, update store ────────────────────────
@@ -424,15 +424,15 @@ export function VideoPreview() {
       }
     }
 
-    window.addEventListener("scribe:play", onPlay);
-    window.addEventListener("scribe:pause", onPause);
-    window.addEventListener("scribe:toggle-play", onToggle);
-    window.addEventListener("scribe:seek-output", onSeekOutput);
+    window.addEventListener("yusafcut:play", onPlay);
+    window.addEventListener("yusafcut:pause", onPause);
+    window.addEventListener("yusafcut:toggle-play", onToggle);
+    window.addEventListener("yusafcut:seek-output", onSeekOutput);
     return () => {
-      window.removeEventListener("scribe:play", onPlay);
-      window.removeEventListener("scribe:pause", onPause);
-      window.removeEventListener("scribe:toggle-play", onToggle);
-      window.removeEventListener("scribe:seek-output", onSeekOutput);
+      window.removeEventListener("yusafcut:play", onPlay);
+      window.removeEventListener("yusafcut:pause", onPause);
+      window.removeEventListener("yusafcut:toggle-play", onToggle);
+      window.removeEventListener("yusafcut:seek-output", onSeekOutput);
     };
   }, [activeMediaId, pauseVideo, playVideo, project, seekToOutputTime]);
 

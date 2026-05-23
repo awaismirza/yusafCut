@@ -659,7 +659,7 @@ fn parse_timestamp(s: &str) -> Option<f64> {
 
 fn tempfile_with_ext(ext: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
-    p.push(format!("scribe-{}.{}", uuid::Uuid::new_v4(), ext));
+    p.push(format!("yusafcut-{}.{}", uuid::Uuid::new_v4(), ext));
     p
 }
 

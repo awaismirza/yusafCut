@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Scribe — production build script
+# YusafCut — production build script
 #
 # Builds a fully self-contained .dmg for distribution on Apple Silicon Macs.
 # Python and all AI code (mlx-lm) are compiled into a single binary via
@@ -54,7 +54,7 @@ VENV="$SIDECAR_DIR/.venv"
 BUILD_START=$(date +%s)
 
 echo -e "\n${BOLD}╔══════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║      Scribe — production build           ║${RESET}"
+echo -e "${BOLD}║      YusafCut — production build           ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 
 # ── 1. Platform guard ─────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-# How to run Scribe on macOS (Apple Silicon)
+# How to run YusafCut on macOS (Apple Silicon)
 
 > **TL;DR** — Install prereqs, run two commands.
 >
@@ -45,7 +45,7 @@ The `@tauri-apps/cli` is a dev dependency in `package.json`, so `npm run tauri` 
 ## 2. First-time setup
 
 ```bash
-cd /path/to/scribe       # wherever you cloned/copied the project
+cd /path/to/yusafcut       # wherever you cloned/copied the project
 
 # Install JavaScript dependencies (required after cloning)
 npm install
@@ -93,7 +93,7 @@ npm run tauri build
 
 The unsigned `.app` is placed in:
 ```
-src-tauri/target/release/bundle/macos/Scribe.app
+src-tauri/target/release/bundle/macos/YusafCut.app
 ```
 
 > **Note:** The app is unsigned so macOS will gatekeeper-block it on first open.
@@ -145,7 +145,7 @@ rm ffmpeg.zip ffprobe.zip
 
 Models are downloaded to:
 ```
-~/Library/Application Support/dev.scribe.app/models/
+~/Library/Application Support/dev.yusafcut.app/models/
 ```
 
 Delete models from there to free disk space.
@@ -157,8 +157,8 @@ on the Neural Engine / Metal for fast transcription.
 
 ### Media files are referenced, not copied
 
-Scribe stores the **path** to your original video, not a copy. Don't move or rename
-your video file after opening it in Scribe — use the **Relink** flow if you do.
+YusafCut stores the **path** to your original video, not a copy. Don't move or rename
+your video file after opening it in YusafCut — use the **Relink** flow if you do.
 
 ---
 
@@ -188,7 +188,7 @@ your video file after opening it in Scribe — use the **Relink** flow if you do
 - The binaries in `src-tauri/binaries/` must be executable: `chmod +x src-tauri/binaries/*`
 
 **Transcription produces garbage / no words**
-- The Whisper model might be corrupt — delete it from `~/Library/Application Support/dev.scribe.app/models/` and re-download.
+- The Whisper model might be corrupt — delete it from `~/Library/Application Support/dev.yusafcut.app/models/` and re-download.
 - Try a smaller model (Tiny or Base) first.
 
 **Export fails with "ffmpeg exited with code …"**

@@ -1,7 +1,7 @@
 [project]
 name = "mlx-llm"
 version = "1.0.0"
-description = "MLX-powered LLM sidecar for Scribe — runs fully on-device via Apple MLX"
+description = "MLX-powered LLM sidecar for YusafCut — runs fully on-device via Apple MLX"
 requires-python = ">=3.11"
 dependencies = [
     "mlx-lm>=0.19",

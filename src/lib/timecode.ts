@@ -1,7 +1,7 @@
 /**
  * Timecode formatting helpers.
  *
- * Scribe stores everything in seconds internally. These helpers render
+ * YusafCut stores everything in seconds internally. These helpers render
  * timecodes for the UI and parse user input.
  */
 

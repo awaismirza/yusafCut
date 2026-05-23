@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Scribe — Mac App Store build script
+# YusafCut — Mac App Store build script
 #
 # Builds a signed .app bundle for Mac App Store submission.
 # The resulting app is NOT notarised (Apple handles that after upload).
@@ -15,10 +15,10 @@
 #   2. Apple Distribution certificate installed in your login keychain.
 #      (Xcode → Settings → Accounts → Manage Certificates → + → Apple Distribution)
 #   3. Mac App Store provisioning profile downloaded from developer.apple.com
-#      and saved as src-tauri/Scribe_MAS.provisionprofile.
+#      and saved as src-tauri/YusafCut_MAS.provisionprofile.
 #
 # After this script:
-#   Run `npm run xcarchive` to create a Scribe.xcarchive and open it in
+#   Run `npm run xcarchive` to create a YusafCut.xcarchive and open it in
 #   Xcode Organizer for upload to App Store Connect.
 # =============================================================================
 set -euo pipefail
@@ -40,7 +40,7 @@ ARCH_SUFFIX="aarch64-apple-darwin"
 BUILD_START=$(date +%s)
 
 echo -e "\n${BOLD}╔══════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║    Scribe — Mac App Store build          ║${RESET}"
+echo -e "${BOLD}║    YusafCut — Mac App Store build          ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 
 # ── 1. Platform guard ─────────────────────────────────────────────────────────
@@ -80,16 +80,16 @@ fi
 # ── 3. Provisioning profile ────────────────────────────────────────────────────
 header "3 / 4  Provisioning profile"
 
-PROFILE="$REPO/src-tauri/Scribe_MAS.provisionprofile"
+PROFILE="$REPO/src-tauri/YusafCut_MAS.provisionprofile"
 if [[ ! -f "$PROFILE" ]]; then
-  die "Provisioning profile not found at src-tauri/Scribe_MAS.provisionprofile
+  die "Provisioning profile not found at src-tauri/YusafCut_MAS.provisionprofile
 
   To create one:
     1. Go to developer.apple.com → Certificates, Identifiers & Profiles → Profiles
     2. Create a new profile: Mac App Store Distribution
-    3. Select App ID: dev.scribe.app
+    3. Select App ID: dev.yusafcut.app
     4. Select your Apple Distribution certificate
-    5. Download it and save to: src-tauri/Scribe_MAS.provisionprofile"
+    5. Download it and save to: src-tauri/YusafCut_MAS.provisionprofile"
 fi
 ok "Provisioning profile found"
 

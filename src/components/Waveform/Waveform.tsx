@@ -251,7 +251,7 @@ export function Waveform() {
     if (!mapped) return;
     setCurrentTime(outputTime);
     window.dispatchEvent(
-      new CustomEvent("scribe:seek-source", {
+      new CustomEvent("yusafcut:seek-source", {
         detail: { start: mapped.sourceTime, mediaId: mapped.segment.mediaId },
       }),
     );

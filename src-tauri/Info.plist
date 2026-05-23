@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>NSCameraUsageDescription</key>
-  <string>Scribe records camera clips locally so they can be imported and transcribed.</string>
+  <string>YusafCut records camera clips locally so they can be imported and transcribed.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Scribe records voice overs and camera audio locally so they can be transcribed.</string>
+  <string>YusafCut records voice overs and camera audio locally so they can be transcribed.</string>
 </dict>
 </plist>

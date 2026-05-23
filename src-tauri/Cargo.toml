@@ -1,8 +1,8 @@
 [package]
-name = "scribe"
+name = "yusafcut"
 version = "3.7.0"
 description = "Local-first text-based video editor"
-authors = ["Scribe contributors"]
+authors = ["YusafCut contributors"]
 license = "AGPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.77"
@@ -10,7 +10,7 @@ rust-version = "1.77"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "scribe_lib"
+name = "yusafcut_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

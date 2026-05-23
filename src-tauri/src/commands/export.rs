@@ -819,7 +819,7 @@ fn build_chapter_ffmetadata(chapters: &[Chapter], total_duration_sec: f64) -> St
 
 fn tempfile_with_ext(ext: &str) -> std::path::PathBuf {
     let mut p = std::env::temp_dir();
-    p.push(format!("scribe-{}.{}", uuid::Uuid::new_v4(), ext));
+    p.push(format!("yusafcut-{}.{}", uuid::Uuid::new_v4(), ext));
     p
 }
 

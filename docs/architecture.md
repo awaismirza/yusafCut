@@ -102,7 +102,7 @@ requestAnimationFrame(() => {
 
 ## Transcription engine
 
-Scribe uses **whisper.cpp** exclusively via the `whisper-cli` sidecar with Core
+YusafCut uses **whisper.cpp** exclusively via the `whisper-cli` sidecar with Core
 ML + Metal acceleration. Key CLI flags for timestamp accuracy:
 
 - `--split-on-word` — per-token word boundaries
@@ -136,7 +136,7 @@ reachable at any window size without hiding any functionality.
 
 ## Cross-platform code that isn't
 
-The Tauri shell supports Linux and Windows, but Scribe explicitly targets
+The Tauri shell supports Linux and Windows, but YusafCut explicitly targets
 Apple Silicon macOS. The architectural choice rests on whisper.cpp's Core ML +
 Metal path and FFmpeg's VideoToolbox. We accept the lock-in for the
 performance moat per spec section 1's non-goals.

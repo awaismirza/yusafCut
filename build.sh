@@ -7,8 +7,8 @@
 #   ./build.sh --dmg    # build only the .dmg installer (skips other bundle types)
 #
 # Output:
-#   src-tauri/target/release/bundle/macos/Scribe.app
-#   src-tauri/target/release/bundle/dmg/Scribe_*.dmg
+#   src-tauri/target/release/bundle/macos/YusafCut.app
+#   src-tauri/target/release/bundle/dmg/YusafCut_*.dmg
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -23,7 +23,7 @@ for arg in "$@"; do
   esac
 done
 
-echo "▶ Scribe production build"
+echo "▶ YusafCut production build"
 
 # -- Check prerequisites --
 if ! command -v cargo &>/dev/null; then
@@ -60,7 +60,7 @@ fi
 echo ""
 echo "✓ Build complete!"
 echo ""
-echo "  App:  src-tauri/target/release/bundle/macos/Scribe.app"
+echo "  App:  src-tauri/target/release/bundle/macos/YusafCut.app"
 echo "  DMG:  src-tauri/target/release/bundle/dmg/"
 echo ""
 echo "  Note: The app is unsigned. On first open, right-click → Open → Open anyway"

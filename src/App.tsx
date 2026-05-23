@@ -21,7 +21,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 const MIN_VIDEO_WIDTH = 360;
 const MAX_VIDEO_WIDTH = 1100;
 const DEFAULT_VIDEO_WIDTH = 560;
-const STORAGE_KEY = "scribe.videoPanelWidth";
+const STORAGE_KEY = "yusafcut.videoPanelWidth";
 const MEDIA_DROP_EXTENSIONS = new Set(["mp4", "mov", "m4v", "mkv", "webm", "m4a", "wav"]);
 
 function isSupportedMediaPath(path: string) {
@@ -53,7 +53,7 @@ export default function App() {
   const [findOpen, setFindOpen] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  // Scribe is an editing surface; keep the chrome consistently dark like an NLE.
+  // YusafCut is an editing surface; keep the chrome consistently dark like an NLE.
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
   }, []);
@@ -106,7 +106,7 @@ export default function App() {
         useProjectStore.getState().addMediaWithTranscript(media, cachedWords);
         usePlayerStore.getState().clearTimelineRange();
         usePlayerStore.getState().setSelectedWordIds(new Set());
-        window.dispatchEvent(new CustomEvent("scribe:seek-output", { detail: { time: appendAt } }));
+        window.dispatchEvent(new CustomEvent("yusafcut:seek-output", { detail: { time: appendAt } }));
         pushToast({
           title: cachedWords.length > 0 ? "Dropped clip added with cached transcript" : "Dropped clip added",
           description:

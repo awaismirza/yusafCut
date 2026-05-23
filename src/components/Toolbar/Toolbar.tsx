@@ -256,7 +256,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
       useProjectStore.getState().addMediaWithTranscript(media, cachedWords);
       usePlayerStore.getState().clearTimelineRange();
       usePlayerStore.getState().setSelectedWordIds(new Set());
-      window.dispatchEvent(new CustomEvent("scribe:seek-output", { detail: { time: appendAt } }));
+      window.dispatchEvent(new CustomEvent("yusafcut:seek-output", { detail: { time: appendAt } }));
       pushToast({
         title: cachedWords.length > 0 ? "Clip added with cached transcript" : "Clip added",
         description:
@@ -293,7 +293,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   async function handleOpenProject() {
     const path = await openDialog({
       multiple: false,
-      filters: [{ name: "Scribe project", extensions: ["scribe"] }],
+      filters: [{ name: "YusafCut project", extensions: ["scribe"] }],
     });
     if (typeof path !== "string") return;
     setMediaLoading(true);
@@ -592,7 +592,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
     if (!path) {
       const next = await saveDialog({
         defaultPath: `${project.name}.scribe`,
-        filters: [{ name: "Scribe project", extensions: ["scribe"] }],
+        filters: [{ name: "YusafCut project", extensions: ["scribe"] }],
       });
       if (!next) return;
       path = next;
@@ -712,11 +712,11 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
   }, [project, pushToast]);
 
   useEffect(() => {
-    window.addEventListener("scribe:save", handleSave);
-    window.addEventListener("scribe:export", handleExport);
+    window.addEventListener("yusafcut:save", handleSave);
+    window.addEventListener("yusafcut:export", handleExport);
     return () => {
-      window.removeEventListener("scribe:save", handleSave);
-      window.removeEventListener("scribe:export", handleExport);
+      window.removeEventListener("yusafcut:save", handleSave);
+      window.removeEventListener("yusafcut:export", handleExport);
     };
   }, [handleSave, handleExport]);
 
@@ -841,7 +841,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               Record locally
             </DialogTitle>
             <DialogDescription>
-              Capture voice, screen, or camera media on this Mac. Scribe saves the clip locally,
+              Capture voice, screen, or camera media on this Mac. YusafCut saves the clip locally,
               imports it, and transcribes it with Whisper.
             </DialogDescription>
           </DialogHeader>
@@ -1231,7 +1231,7 @@ export function Toolbar({ onFindClick }: ToolbarProps) {
               Transcribing media
             </DialogTitle>
             <DialogDescription>
-              Scribe is building the word-level edit timeline locally on this Mac.
+              YusafCut is building the word-level edit timeline locally on this Mac.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
