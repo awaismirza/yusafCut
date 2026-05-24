@@ -20,6 +20,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:build:dmg": "tauri build --bundles dmg",
+    "dmg:release": "bash scripts/release-dmg.sh",
     "clean": "rimraf dist node_modules/.vite && cd src-tauri && cargo clean --quiet",
     "clean:rust": "cd src-tauri && cargo clean",
     "clean:all": "rimraf dist node_modules && cd src-tauri && cargo clean --quiet",
