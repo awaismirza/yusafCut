@@ -69,18 +69,43 @@ project today, run the app locally with `npm run tauri:dev`.
 
 ## Quick Start
 
+### First-time setup
+
+Clone the repository and install dependencies:
+
 ```bash
 git clone https://github.com/awaismirza/yusafCut.git
 cd yusafCut
 nvm use
-npm install
-./src-tauri/binaries/fetch.sh
-npm run tauri:dev
+npm run setup:all
 ```
 
-`fetch.sh` handles FFmpeg and FFprobe. The Whisper CLI binary may need to be
-built separately depending on your local setup. See
-[`src-tauri/binaries/README.md`](src-tauri/binaries/README.md).
+The `setup:all` script handles:
+- Node.js dependencies installation
+- Rust toolchain setup
+- Sidecar binary fetching (FFmpeg, FFprobe)
+
+The Whisper CLI binary may need to be built separately. See [`src-tauri/binaries/README.md`](src-tauri/binaries/README.md) for instructions.
+
+### Local development
+
+Start the full desktop app (React + Tauri + Rust):
+
+```bash
+npm start
+```
+
+The dev server reloads on file changes. First launch takes ~30–60 seconds while Rust compiles; subsequent restarts are faster.
+
+### Production build
+
+Build a release-ready `.app` and `.dmg` for macOS:
+
+```bash
+npm run build:production
+```
+
+The built artifacts will be in `src-tauri/target/release/bundle/`.
 
 ## Common Commands
 
@@ -110,7 +135,7 @@ which keeps preview, undo, save/load, and export predictable.
 Read more in:
 
 - [`docs/architecture.md`](docs/architecture.md)
-- [`yusafcut-spec.md`](yusafcut-spec.md)
+- [`docs/yusafcut-spec.md`](docs/yusafcut-spec.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/manual-test.md`](docs/manual-test.md)
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-05-24
+
+### Changed
+- **Open source release preparation.** Updated README with clearer setup and build instructions. Implemented proper AGPL-3.0-or-later license file. Moved `yusafcut-spec.md` into `docs/` folder for consistency with other documentation. Removed vite.config.ts timestamp cache files from version control.
+
 ## [3.7.0] - 2026-05-21
 
 ### Fixed

@@ -50,7 +50,7 @@ npm run tauri:dev
 
 ## Don't deviate from the architecture without discussion
 
-The spec document at the repo root is binding. If you think a phase should be
+The spec document at [`docs/yusafcut-spec.md`](docs/yusafcut-spec.md) is binding. If you think a phase should be
 rearranged, or a tech choice should change, open a draft issue first. Push
 back on suggestions (including AI suggestions) that drift without
 justification.

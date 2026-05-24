@@ -34,7 +34,7 @@ Every time you implement a feature or fix a bug you **must** also update in the 
 - `CHANGELOG.md` — add an entry under `[Unreleased]` or the new version section
 - `docs/architecture.md` — if the data flow, component layout, or Rust structure changed
 - `README.md` — if the feature table, status, or tech stack changed
-- `yusafcut-spec.md` — if spec sections describing the changed behaviour are outdated
+- `docs/yusafcut-spec.md` — if spec sections describing the changed behaviour are outdated
 
 No code commit should land without the corresponding doc update.
 

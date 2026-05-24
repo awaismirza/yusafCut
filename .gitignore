@@ -12,6 +12,7 @@ dist-ssr/
 
 # Vite
 .vite/
+vite.config.ts.timestamp-*.mjs
 
 # Build artefacts
 src-tauri/target/
