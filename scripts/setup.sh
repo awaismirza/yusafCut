@@ -168,11 +168,11 @@ else
       || die "Failed to configure whisper.cpp"
 
     info "Building whisper-cli (static binary — no dynamic libs)…"
-    cmake --build "$WHISPER_TMP/build" --target main -j$(sysctl -n hw.logicalcpu) 2>/dev/null \
+    cmake --build "$WHISPER_TMP/build" --target whisper-cli -j$(sysctl -n hw.logicalcpu) 2>/dev/null \
       || die "Failed to build whisper-cli"
 
-    BUILT=$(find "$WHISPER_TMP/build" -name "main" -perm +111 -type f 2>/dev/null | head -1)
-    [[ -n "$BUILT" ]] || die "whisper-cli binary not found after build"
+    BUILT=$(find "$WHISPER_TMP/build/bin" -name "whisper-cli" -perm +111 -type f 2>/dev/null | head -1)
+    [[ -n "$BUILT" ]] || die "whisper-cli binary not found after build — check cmake output"
 
     cp "$BUILT" "$WHISPER"
     chmod +x "$WHISPER"
