@@ -202,40 +202,55 @@ git -C "$REPO" update-index --skip-worktree \
     "src-tauri/binaries/mlx-sidecar-$ARCH_SUFFIX" 2>/dev/null || true
 ok "git skip-worktree set on mlx-sidecar — won't appear in 'git status'"
 
-# ── 5a. whisper-cli — build from source if missing or stub ─────────────────────
+# ── 5a. whisper-cli — build from source if missing, stub, or dynamically linked ──
 WHISPER_BIN="$BINS/whisper-cli-$ARCH_SUFFIX"
-_ws_is_stub() {
-  [[ -f "$WHISPER_BIN" ]] && head -1 "$WHISPER_BIN" 2>/dev/null | grep -q "^#!"
-}
-if [[ -f "$WHISPER_BIN" ]] && [[ -x "$WHISPER_BIN" ]] && ! _ws_is_stub; then
+_ws_is_stub()   { [[ -f "$WHISPER_BIN" ]] && head -1 "$WHISPER_BIN" 2>/dev/null | grep -q "^#!"; }
+_ws_has_rpath() { [[ -f "$WHISPER_BIN" ]] && otool -L "$WHISPER_BIN" 2>/dev/null | grep -q "@rpath/libwhisper"; }
+
+if [[ -f "$WHISPER_BIN" ]] && [[ -x "$WHISPER_BIN" ]] && ! _ws_is_stub && ! _ws_has_rpath; then
   WSSIZE=$(du -sh "$WHISPER_BIN" | awk '{print $1}')
-  ok "whisper-cli present (${WSSIZE})"
+  ok "whisper-cli present — static (${WSSIZE})"
 else
   if _ws_is_stub; then
     info "whisper-cli is a dev stub — replacing with real binary…"
+  elif _ws_has_rpath; then
+    info "whisper-cli is dynamically linked — rebuilding as static binary…"
   else
     info "whisper-cli not found — building from source…"
   fi
 
-  # Build whisper.cpp from source (static binary)
+  command -v cmake >/dev/null 2>&1 || die "cmake not found — install via: brew install cmake"
+
   WHISPER_TMP="/tmp/whisper.cpp.build.$$"
   mkdir -p "$WHISPER_TMP"
 
   info "Cloning whisper.cpp v1.7.5…"
-  git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null || die "Failed to clone whisper.cpp"
+  git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null \
+    || die "Failed to clone whisper.cpp"
 
-  info "Building with Core ML + Metal (static binary - no dynamic libs)…"
-  cd "$WHISPER_TMP"
-  GGML_STATIC=1 WHISPER_COREML=1 WHISPER_METAL=1 make -j$(sysctl -n hw.logicalcpu) main 2>/dev/null || die "Failed to build whisper-cli"
+  info "Configuring with CMake (static libs, Core ML + Metal)…"
+  cmake -S "$WHISPER_TMP" -B "$WHISPER_TMP/build" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DGGML_STATIC=ON \
+    -DWHISPER_METAL=ON \
+    -DWHISPER_COREML=ON \
+    -DWHISPER_BUILD_TESTS=OFF 2>/dev/null \
+    || die "Failed to configure whisper.cpp"
 
-  info "Installing whisper-cli…"
-  cp main "$WHISPER_BIN"
+  info "Building whisper-cli (static binary — no dynamic libs)…"
+  cmake --build "$WHISPER_TMP/build" --target main -j$(sysctl -n hw.logicalcpu) 2>/dev/null \
+    || die "Failed to build whisper-cli"
+
+  BUILT=$(find "$WHISPER_TMP/build" -name "main" -perm +111 -type f 2>/dev/null | head -1)
+  [[ -n "$BUILT" ]] || die "whisper-cli binary not found after cmake build"
+
+  cp "$BUILT" "$WHISPER_BIN"
   chmod +x "$WHISPER_BIN"
-  cd "$REPO"
   rm -rf "$WHISPER_TMP"
 
   WSSIZE=$(du -sh "$WHISPER_BIN" | awk '{print $1}')
-  ok "whisper-cli built and installed (${WSSIZE})"
+  ok "whisper-cli built and installed — static (${WSSIZE})"
 fi
 
 # ── 5b. whisperkit-cli — build from source if stub or missing ─────────────────

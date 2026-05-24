@@ -26,10 +26,11 @@ set -euo pipefail
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 
-ok()   { echo -e "  ${GREEN}✓${RESET}  $*"; }
-warn() { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
-info() { echo -e "  ${CYAN}→${RESET}  $*"; }
-fail() { echo -e "  ${RED}✗${RESET}  $*"; }
+ok()     { echo -e "  ${GREEN}✓${RESET}  $*"; }
+warn()   { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
+info()   { echo -e "  ${CYAN}→${RESET}  $*"; }
+fail()   { echo -e "  ${RED}✗${RESET}  $*"; }
+die()    { fail "$*"; exit 1; }
 header() { echo -e "\n${BOLD}$*${RESET}"; }
 
 # ── repo root ─────────────────────────────────────────────────────────────────
@@ -130,38 +131,56 @@ download_ffmpeg "ffprobe" "https://evermeet.cx/ffmpeg/ffprobe-7.1.zip" "$FFPROBE
 # ── 5. whisper-cli ────────────────────────────────────────────────────────────
 header "5 / 7  whisper-cli"
 WHISPER="$BINS/whisper-cli-$ARCH_SUFFIX"
-_ws_is_stub() {
-  [[ -f "$WHISPER" ]] && head -1 "$WHISPER" 2>/dev/null | grep -q "^#!"
-}
-if [[ -f "$WHISPER" ]] && [[ -x "$WHISPER" ]] && ! _ws_is_stub; then
+_ws_is_stub()      { [[ -f "$WHISPER" ]] && head -1 "$WHISPER" 2>/dev/null | grep -q "^#!"; }
+_ws_has_rpath()    { [[ -f "$WHISPER" ]] && otool -L "$WHISPER" 2>/dev/null | grep -q "@rpath/libwhisper"; }
+
+if [[ -f "$WHISPER" ]] && [[ -x "$WHISPER" ]] && ! _ws_is_stub && ! _ws_has_rpath; then
   WSIZE=$(du -sh "$WHISPER" 2>/dev/null | awk '{print $1}')
-  ok "whisper-cli present (${WSIZE})"
+  ok "whisper-cli present — static (${WSIZE})"
 else
   if _ws_is_stub; then
     info "whisper-cli is a dev stub — replacing with real binary…"
+  elif _ws_has_rpath; then
+    info "whisper-cli is dynamically linked — rebuilding as static binary…"
   else
     info "whisper-cli not found — building from source…"
   fi
 
-  # Build whisper.cpp from source
-  WHISPER_TMP="/tmp/whisper.cpp.setup.$$"
-  mkdir -p "$WHISPER_TMP"
+  if ! command -v cmake >/dev/null 2>&1; then
+    warn "cmake not found — install via: brew install cmake"
+    warn "Skipping whisper-cli build. Transcription will not work."
+  else
+    WHISPER_TMP="/tmp/whisper.cpp.setup.$$"
+    mkdir -p "$WHISPER_TMP"
 
-  info "Cloning whisper.cpp v1.7.5…"
-  git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null || die "Failed to clone whisper.cpp"
+    info "Cloning whisper.cpp v1.7.5…"
+    git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null \
+      || die "Failed to clone whisper.cpp"
 
-  info "Building with Core ML + Metal (static binary - no dynamic libs)…"
-  cd "$WHISPER_TMP"
-  GGML_STATIC=1 WHISPER_COREML=1 WHISPER_METAL=1 make -j$(sysctl -n hw.logicalcpu) main 2>/dev/null || die "Failed to build whisper-cli"
+    info "Configuring with CMake (static libs, Core ML + Metal)…"
+    cmake -S "$WHISPER_TMP" -B "$WHISPER_TMP/build" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DGGML_STATIC=ON \
+      -DWHISPER_METAL=ON \
+      -DWHISPER_COREML=ON \
+      -DWHISPER_BUILD_TESTS=OFF 2>/dev/null \
+      || die "Failed to configure whisper.cpp"
 
-  info "Installing whisper-cli…"
-  cp main "$WHISPER"
-  chmod +x "$WHISPER"
-  cd "$REPO"
-  rm -rf "$WHISPER_TMP"
+    info "Building whisper-cli (static binary — no dynamic libs)…"
+    cmake --build "$WHISPER_TMP/build" --target main -j$(sysctl -n hw.logicalcpu) 2>/dev/null \
+      || die "Failed to build whisper-cli"
 
-  WSIZE=$(du -sh "$WHISPER" | awk '{print $1}')
-  ok "whisper-cli built and installed (${WSIZE})"
+    BUILT=$(find "$WHISPER_TMP/build" -name "main" -perm +111 -type f 2>/dev/null | head -1)
+    [[ -n "$BUILT" ]] || die "whisper-cli binary not found after build"
+
+    cp "$BUILT" "$WHISPER"
+    chmod +x "$WHISPER"
+    rm -rf "$WHISPER_TMP"
+
+    WSIZE=$(du -sh "$WHISPER" | awk '{print $1}')
+    ok "whisper-cli built and installed — static (${WSIZE})"
+  fi
 fi
 
 # ── 6. whisperkit-cli ─────────────────────────────────────────────────────────
