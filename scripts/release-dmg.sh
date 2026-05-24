@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # Parse arguments
 BUMP_TYPE="${1:-patch}"
 
@@ -11,7 +13,7 @@ if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch)$ ]]; then
 fi
 
 # Extract current version
-CURRENT_VERSION=$(jq -r '.version' package.json)
+CURRENT_VERSION=$(jq -r '.version' "$REPO/package.json")
 echo "Current version: $CURRENT_VERSION"
 
 # Calculate next version
@@ -35,6 +37,7 @@ echo ""
 # Create release branch
 BRANCH="chore/release-$NEW_VERSION"
 echo "🌿 Creating branch: $BRANCH"
+cd "$REPO"
 git checkout main
 git pull origin main
 git checkout -b "$BRANCH"
@@ -55,7 +58,7 @@ mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
 # Update Cargo.lock
 echo "📝 Updating src-tauri/Cargo.lock..."
-cd src-tauri && cargo update -p scribe 2>/dev/null || true && cd ..
+cd src-tauri && cargo update -p scribe 2>/dev/null || true && cd "$REPO"
 
 # Commit version bump
 echo "📦 Committing version bump..."
@@ -70,7 +73,7 @@ git push -u origin "$BRANCH"
 echo "📋 Creating pull request..."
 PR_URL=$(gh pr create \
   --title "chore: release v$NEW_VERSION" \
-  --body "Version bump to $NEW_VERSION. See CHANGELOG.md for details." | grep -oP 'https.*')
+  --body "Version bump to $NEW_VERSION. See CHANGELOG.md for details.")
 
 echo "PR created: $PR_URL"
 echo ""
@@ -85,17 +88,19 @@ echo "🔄 Switching to main and pulling..."
 git checkout main
 git pull origin main
 
-# Build and release DMG
+# Build production DMG (comprehensive build with all sidecars)
 TAG="v$NEW_VERSION"
 echo ""
-echo "📦 Building notarized DMG for version $NEW_VERSION..."
-npm run tauri:build:dmg
+echo "📦 Building production notarized DMG for version $NEW_VERSION..."
+echo "   (Running build-production script with full sidecar verification)"
+echo ""
+npm run build:production
 
 # Find the DMG file
-DMG_FILE=$(ls -t src-tauri/target/release/bundle/macos/YusafCut_*.dmg 2>/dev/null | head -1)
+DMG_FILE=$(find "$REPO/src-tauri/target/release/bundle/dmg" -name "*.dmg" 2>/dev/null | head -1)
 
 if [ ! -f "$DMG_FILE" ]; then
-  echo "❌ DMG file not found at src-tauri/target/release/bundle/macos/"
+  echo "❌ DMG file not found at src-tauri/target/release/bundle/dmg/"
   exit 1
 fi
 
@@ -109,7 +114,7 @@ git push origin "$TAG"
 
 # Create GitHub release
 echo "📝 Creating GitHub release..."
-NOTES="YusafCut $NEW_VERSION release. See [CHANGELOG.md](https://github.com/awaismirza/yusafCut/blob/main/CHANGELOG.md) for details."
+NOTES="YusafCut $NEW_VERSION release with full production build. See [CHANGELOG.md](https://github.com/awaismirza/yusafCut/blob/main/CHANGELOG.md) for details."
 
 gh release create "$TAG" \
   --title "YusafCut $NEW_VERSION" \
