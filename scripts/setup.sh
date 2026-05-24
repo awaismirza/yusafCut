@@ -130,19 +130,38 @@ download_ffmpeg "ffprobe" "https://evermeet.cx/ffmpeg/ffprobe-7.1.zip" "$FFPROBE
 # ── 5. whisper-cli ────────────────────────────────────────────────────────────
 header "5 / 7  whisper-cli"
 WHISPER="$BINS/whisper-cli-$ARCH_SUFFIX"
-if [[ -f "$WHISPER" ]] && [[ -x "$WHISPER" ]]; then
+_ws_is_stub() {
+  [[ -f "$WHISPER" ]] && head -1 "$WHISPER" 2>/dev/null | grep -q "^#!"
+}
+if [[ -f "$WHISPER" ]] && [[ -x "$WHISPER" ]] && ! _ws_is_stub; then
   WSIZE=$(du -sh "$WHISPER" 2>/dev/null | awk '{print $1}')
   ok "whisper-cli present (${WSIZE})"
 else
-  warn "whisper-cli not found — whisper.cpp transcription will not work."
-  echo ""
-  echo "      Build it from source (5–10 min):"
-  echo "      ┌─────────────────────────────────────────────────────────┐"
-  echo "      │  git clone https://github.com/ggerganov/whisper.cpp     │"
-  echo "      │  cd whisper.cpp                                         │"
-  echo "      │  WHISPER_COREML=1 WHISPER_METAL=1 make -j              │"
-  echo "      │  cp main $BINS/whisper-cli-$ARCH_SUFFIX  │"
-  echo "      └─────────────────────────────────────────────────────────┘"
+  if _ws_is_stub; then
+    info "whisper-cli is a dev stub — replacing with real binary…"
+  else
+    info "whisper-cli not found — building from source…"
+  fi
+
+  # Build whisper.cpp from source
+  WHISPER_TMP="/tmp/whisper.cpp.setup.$$"
+  mkdir -p "$WHISPER_TMP"
+
+  info "Cloning whisper.cpp v1.7.5…"
+  git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null || die "Failed to clone whisper.cpp"
+
+  info "Building with Core ML + Metal acceleration…"
+  cd "$WHISPER_TMP"
+  WHISPER_COREML=1 WHISPER_METAL=1 make -j$(sysctl -n hw.logicalcpu) main 2>/dev/null || die "Failed to build whisper-cli"
+
+  info "Installing whisper-cli…"
+  cp main "$WHISPER"
+  chmod +x "$WHISPER"
+  cd "$REPO"
+  rm -rf "$WHISPER_TMP"
+
+  WSIZE=$(du -sh "$WHISPER" | awk '{print $1}')
+  ok "whisper-cli built and installed (${WSIZE})"
 fi
 
 # ── 6. whisperkit-cli ─────────────────────────────────────────────────────────
