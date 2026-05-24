@@ -12,10 +12,10 @@
 # Steps:
 #   1. Platform guard — Apple Silicon only
 #   2. Prerequisites check (node, python 3.11+, cargo/rustup, Xcode CLT)
+#   2b. Download ffmpeg + ffprobe if missing
 #   3. Python venv — install/update all sidecar dependencies
 #   4. Build PyInstaller binary — bundles Python + mlx-lm into one executable
-#   5. Sanity-check: ensure the binary is a real compiled binary, not the dev
-#      shell-script launcher
+#   5. Sanity-check & build sidecars (mlx-sidecar, whisper-cli, whisperkit-cli)
 #   6. tauri build --bundles dmg
 #   7. Print the .dmg path
 #
@@ -58,13 +58,13 @@ echo -e "${BOLD}║      YusafCut — production build           ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 
 # ── 1. Platform guard ─────────────────────────────────────────────────────────
-header "1 / 6  Platform"
+header "1 / 7  Platform"
 [[ "$(uname -s)" == "Darwin" ]] || die "macOS required."
 [[ "$(uname -m)" == "arm64"  ]] || die "Apple Silicon (arm64) required for this build."
 ok "Apple Silicon Mac"
 
 # ── 2. Prerequisites ──────────────────────────────────────────────────────────
-header "2 / 6  Prerequisites"
+header "2 / 7  Prerequisites"
 
 # Node
 if ! command -v node >/dev/null 2>&1; then
@@ -110,8 +110,42 @@ info "Running npm install…"
 npm install --prefix "$REPO" --silent
 ok "npm packages up to date"
 
+# ── 2b. FFmpeg / FFprobe binaries ─────────────────────────────────────────────
+FFMPEG="$BINS/ffmpeg-$ARCH_SUFFIX"
+FFPROBE="$BINS/ffprobe-$ARCH_SUFFIX"
+
+_download_ffmpeg() {
+  local name="$1" url="$2" dest="$3" zipname="$4"
+  if [[ -f "$dest" ]] && [[ -x "$dest" ]]; then
+    return 0
+  fi
+  info "Downloading $name from evermeet.cx…"
+  curl -fsSL -o "/tmp/$zipname" "$url" || die "Failed to download $name"
+  unzip -oq "/tmp/$zipname" -d "/tmp" || die "Failed to extract $name"
+  [[ -f "/tmp/$name" ]] || die "$name not found in archive"
+  mv "/tmp/$name" "$dest"
+  chmod +x "$dest"
+  rm -f "/tmp/$zipname"
+}
+
+if [[ ! -f "$FFMPEG" ]] || [[ ! -x "$FFMPEG" ]]; then
+  _download_ffmpeg "ffmpeg" "https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip" "$FFMPEG" "ffmpeg.zip"
+  ok "ffmpeg downloaded and installed"
+else
+  FMSIZE=$(du -sh "$FFMPEG" | awk '{print $1}')
+  ok "ffmpeg present (${FMSIZE})"
+fi
+
+if [[ ! -f "$FFPROBE" ]] || [[ ! -x "$FFPROBE" ]]; then
+  _download_ffmpeg "ffprobe" "https://evermeet.cx/ffmpeg/ffprobe-7.1.zip" "$FFPROBE" "ffprobe.zip"
+  ok "ffprobe downloaded and installed"
+else
+  FPSIZE=$(du -sh "$FFPROBE" | awk '{print $1}')
+  ok "ffprobe present (${FPSIZE})"
+fi
+
 # ── 3. Python venv + dependencies ─────────────────────────────────────────────
-header "3 / 6  Python sidecar dependencies"
+header "3 / 7  Python sidecar dependencies"
 
 if [[ ! -x "$VENV/bin/python" ]]; then
   info "Creating venv at sidecars/mlx-llm/.venv …"
@@ -135,7 +169,7 @@ PYINST_VER=$("$VENV/bin/python" -m PyInstaller --version 2>/dev/null)
 ok "PyInstaller $PYINST_VER"
 
 # ── 4. Build PyInstaller sidecar binary ───────────────────────────────────────
-header "4 / 6  Building MLX sidecar binary (PyInstaller)"
+header "4 / 7  Building MLX sidecar binary (PyInstaller)"
 info "This bundles Python + mlx-lm into a single self-contained executable."
 info "Expect 2–5 minutes on first run; subsequent runs are faster."
 
@@ -143,7 +177,7 @@ info "Expect 2–5 minutes on first run; subsequent runs are faster."
 "$VENV/bin/python" "$SIDECAR_DIR/build.py"
 
 # ── 5. Sanity-check the binary ────────────────────────────────────────────────
-header "5 / 6  Verifying sidecar binary"
+header "5 / 7  Verifying sidecar binary + building missing binaries"
 
 if [[ ! -f "$SIDECAR_BIN" ]]; then
   die "sidecar binary not found at $SIDECAR_BIN — PyInstaller may have failed."
@@ -180,6 +214,7 @@ else
 fi
 
 # ── 5b. whisperkit-cli — build from source if stub or missing ─────────────────
+header "5b / 7  WhisperKit CLI (optional)"
 WHISPERKIT_BIN="$BINS/whisperkit-cli-$ARCH_SUFFIX"
 _wk_is_stub() {
   [[ -f "$WHISPERKIT_BIN" ]] && head -1 "$WHISPERKIT_BIN" 2>/dev/null | grep -q "^#!"
@@ -202,7 +237,7 @@ else
 fi
 
 # ── 6. tauri build --bundles dmg ──────────────────────────────────────────────
-header "6 / 6  Building production .dmg"
+header "6 / 7  Building production .dmg (Rust release + bundled sidecars)"
 info "Running: tauri build --bundles dmg"
 info "This compiles Rust in release mode and bundles all sidecars. Expect 5–15 minutes."
 
