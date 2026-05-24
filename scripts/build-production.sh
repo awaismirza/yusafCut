@@ -202,15 +202,40 @@ git -C "$REPO" update-index --skip-worktree \
     "src-tauri/binaries/mlx-sidecar-$ARCH_SUFFIX" 2>/dev/null || true
 ok "git skip-worktree set on mlx-sidecar — won't appear in 'git status'"
 
-# Check whisper-cli is present (transcription won't work without it)
+# ── 5a. whisper-cli — build from source if missing or stub ─────────────────────
 WHISPER_BIN="$BINS/whisper-cli-$ARCH_SUFFIX"
-if [[ ! -x "$WHISPER_BIN" ]]; then
-  warn "whisper-cli not found — whisper.cpp transcription will not work."
-  warn "Build from source: https://github.com/ggerganov/whisper.cpp"
-  warn "  WHISPER_COREML=1 WHISPER_METAL=1 make -j && cp main $WHISPER_BIN"
+_ws_is_stub() {
+  [[ -f "$WHISPER_BIN" ]] && head -1 "$WHISPER_BIN" 2>/dev/null | grep -q "^#!"
+}
+if [[ -f "$WHISPER_BIN" ]] && [[ -x "$WHISPER_BIN" ]] && ! _ws_is_stub; then
+  WSSIZE=$(du -sh "$WHISPER_BIN" | awk '{print $1}')
+  ok "whisper-cli present (${WSSIZE})"
 else
-  WSIZE=$(du -sh "$WHISPER_BIN" | awk '{print $1}')
-  ok "whisper-cli present (${WSIZE})"
+  if _ws_is_stub; then
+    info "whisper-cli is a dev stub — replacing with real binary…"
+  else
+    info "whisper-cli not found — building from source…"
+  fi
+
+  # Build whisper.cpp from source (static binary)
+  WHISPER_TMP="/tmp/whisper.cpp.build.$$"
+  mkdir -p "$WHISPER_TMP"
+
+  info "Cloning whisper.cpp v1.7.5…"
+  git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null || die "Failed to clone whisper.cpp"
+
+  info "Building with Core ML + Metal (static binary - no dynamic libs)…"
+  cd "$WHISPER_TMP"
+  GGML_STATIC=1 WHISPER_COREML=1 WHISPER_METAL=1 make -j$(sysctl -n hw.logicalcpu) main 2>/dev/null || die "Failed to build whisper-cli"
+
+  info "Installing whisper-cli…"
+  cp main "$WHISPER_BIN"
+  chmod +x "$WHISPER_BIN"
+  cd "$REPO"
+  rm -rf "$WHISPER_TMP"
+
+  WSSIZE=$(du -sh "$WHISPER_BIN" | awk '{print $1}')
+  ok "whisper-cli built and installed (${WSSIZE})"
 fi
 
 # ── 5b. whisperkit-cli — build from source if stub or missing ─────────────────

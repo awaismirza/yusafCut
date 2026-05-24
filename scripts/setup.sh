@@ -150,9 +150,9 @@ else
   info "Cloning whisper.cpp v1.7.5…"
   git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$WHISPER_TMP" 2>/dev/null || die "Failed to clone whisper.cpp"
 
-  info "Building with Core ML + Metal acceleration…"
+  info "Building with Core ML + Metal (static binary - no dynamic libs)…"
   cd "$WHISPER_TMP"
-  WHISPER_COREML=1 WHISPER_METAL=1 make -j$(sysctl -n hw.logicalcpu) main 2>/dev/null || die "Failed to build whisper-cli"
+  GGML_STATIC=1 WHISPER_COREML=1 WHISPER_METAL=1 make -j$(sysctl -n hw.logicalcpu) main 2>/dev/null || die "Failed to build whisper-cli"
 
   info "Installing whisper-cli…"
   cp main "$WHISPER"
