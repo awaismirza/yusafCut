@@ -87,15 +87,22 @@ git pull origin main
 
 # Build and release DMG
 TAG="v$NEW_VERSION"
+
+# Setup all dependencies first
 echo ""
-echo "📦 Building notarized DMG for version $NEW_VERSION..."
-npm run tauri:build:dmg
+echo "📋 Setting up all dependencies (FFmpeg, Whisper-cli, etc)..."
+npm run setup:all
+
+# Build production DMG
+echo ""
+echo "📦 Building production notarized DMG for version $NEW_VERSION..."
+npm run build:production
 
 # Find the DMG file
-DMG_FILE=$(ls -t src-tauri/target/release/bundle/macos/YusafCut_*.dmg 2>/dev/null | head -1)
+DMG_FILE=$(find "$REPO/src-tauri/target/release/bundle/dmg" -name "*.dmg" 2>/dev/null | head -1)
 
 if [ ! -f "$DMG_FILE" ]; then
-  echo "❌ DMG file not found at src-tauri/target/release/bundle/macos/"
+  echo "❌ DMG file not found at src-tauri/target/release/bundle/dmg/"
   exit 1
 fi
 
