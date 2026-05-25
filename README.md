@@ -12,6 +12,10 @@ cloud upload, no telemetry, and no API keys.
 The project is built with Tauri, React, TypeScript, Rust, whisper.cpp, and
 FFmpeg. It currently targets Apple Silicon Macs.
 
+<a href="https://buymeacoffee.com/awaisjamil">
+  <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=awaisjamil&button_colour=FFDD00&font_colour=000000&font_family=Lato&outline_colour=000000&coffee_colour=ffffff" />
+</a>
+
 ## Why YusafCut?
 
 - **Transcript-first editing:** the transcript is the timeline, not a side
